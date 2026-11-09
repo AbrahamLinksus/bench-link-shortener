@@ -8,6 +8,9 @@
 >
 > Source: approved `docs/SPEC.md` and `docs/HLD.md`. Stack fixed by the owner (`docs/owner-spec.md`).
 > Story IDs (US-xx) and flow IDs (F-x) refer to SPEC.
+>
+> **As-built status:** synced to the code at the end of M1 (T-01, T-02, T-03). §10.1 / §10.4
+> (`start.sh`, `.env.example`, `.gitignore`) and §10.5 (README) are still design-only (M2).
 
 ## §0 Overview
 
@@ -21,7 +24,7 @@
 | Persistence | stdlib `sqlite3`, one connection per request, autocommit | Fixed by owner. Per-request connections are thread-safe without a global lock (HLD risk "SQLite across threads", Tier 2 resolved here) | One shared connection + `threading.Lock` — serialises all requests and needs lock discipline everywhere |
 | Config | frozen `dataclass` read from `os.environ` | Owner forbids `pydantic-settings`; one setting only | `pydantic-settings` — not allowed |
 | ASGI server | `uvicorn` (plain, no `[standard]` extra) via `--factory` | Allowed extra; `[standard]` would pull uvloop/httptools/watchfiles | `uvicorn[standard]` — extra packages |
-| Tests | `pytest` + `pytest-cov` + FastAPI `TestClient` (needs `httpx`) | Fixed / allowed | — |
+| Tests | `pytest` + `pytest-cov` + FastAPI `TestClient` (needs `httpx`) | Fixed / allowed | — (known issue: current Starlette warns that the httpx-based `TestClient` transport is deprecated; warning only, no package change, §11.4) |
 | Lint / format / types | `ruff check`, `ruff format --check`, `mypy --strict` (+ `pydantic.mypy` plugin, shipped inside pydantic) | Fixed by owner | — |
 | Layer rules | AST-based test `tests/test_architecture.py` (stdlib `ast`) | Enforces §0.3 with zero new packages | `import-linter` — not in the owner's package list |
 | Complexity | ruff `C901` / `PLR0911-0915` | Already in ruff | `radon` — not in the owner's package list |
@@ -36,7 +39,9 @@
 ├── .gitignore                # + links.db, *.db, .coverage, htmlcov/ (§10.4)
 ├── start.sh                  # §10.1 (executable)
 ├── scripts/
-│   └── check.sh              # §10.2 (executable) quality gate
+│   ├── check.sh              # §10.2 (executable) quality gate
+│   └── git-hooks/
+│       └── pre-commit        # §10.6 (executable) lint/format/types before commit
 ├── README.md                 # §10.5 (written by docs agent)
 ├── src/
 │   └── link_shortener/
@@ -64,6 +69,7 @@
     ├── test_api_create.py    # POST /links
     ├── test_api_redirect.py  # GET /{code}
     ├── test_api_stats.py     # GET /links/{code}/stats
+    ├── test_api_edge.py      # cross-endpoint edge cases (uniqueness, case, no-click on 404)
     ├── test_persistence.py   # US-06 via two app instances
     └── test_architecture.py  # §0.3 layer contracts
 ```
@@ -101,22 +107,28 @@ main (§9) = composition root: the only module that imports everything and wires
 | `routes` | `domain`, `service`, `schemas` | `sqlite3`, `link_shortener.repository`, `link_shortener.db`, `link_shortener.codes`, `link_shortener.config`, `link_shortener.main` |
 | `main` | everything | — |
 
+As built, the table is the `CONTRACTS` dict in `tests/test_architecture.py`. Relative imports
+(`from . import x`) count as a violation in every module except `main` (they are recorded as the
+internal name `<relative>`, which no contract allows), so all package imports must be absolute.
+
 Component diagram: `docs/diagrams/lld-components.mmd` (source written to `.results/lld/lld-components.mmd`; the Orchestrator copies it to `docs/diagrams/`).
 
 ### §0.4 Packages
-Versions are exact pins (`==`) in `pyproject.toml`; `uv.lock` holds the transitive set
-(pydantic, starlette, anyio, … come in through FastAPI / httpx and are not listed directly).
-See the full report's "Needs the owner's approval" about refreshing these pins at lock time.
+As built (owner decision D-05): `pyproject.toml` declares **lower bounds** (`>=`, the
+latest release at env-setup time) and `uv.lock` holds the exact resolved versions, including the
+transitive set (pydantic, starlette, anyio, … come in through FastAPI / httpx and are not listed
+directly). The versions below are the ones resolved in `uv.lock`; `uv.lock` is the source of
+truth and upgrades remain a Tier 1 decision.
 
-| Package | Version | Group | Purpose | Alternative rejected |
+| Package | Version (uv.lock; `>=` floor in pyproject) | Group | Purpose | Alternative rejected |
 |---|---|---|---|---|
-| fastapi | 0.116.1 | runtime | HTTP framework, DI, validation (brings pydantic v2) | — (fixed by owner) |
-| uvicorn | 0.35.0 | runtime | ASGI server for `start.sh` | `uvicorn[standard]` (extra packages) |
-| httpx | 0.28.1 | dev | Transport for FastAPI `TestClient` | — (allowed extra) |
-| pytest | 8.4.1 | dev | Test runner | — (fixed) |
-| pytest-cov | 6.2.1 | dev | Coverage + `--cov-fail-under=85` | — (fixed) |
-| ruff | 0.12.4 | dev | Lint + format check (incl. complexity rules) | radon (not allowed) |
-| mypy | 1.17.0 | dev | `--strict` type checking | pyright (not in owner's list) |
+| fastapi | 0.162.2 | runtime | HTTP framework, DI, validation (brings pydantic v2) | — (fixed by owner) |
+| uvicorn | 0.54.0 | runtime | ASGI server for `start.sh` | `uvicorn[standard]` (extra packages) |
+| httpx | 0.28.1 | dev | Transport for FastAPI `TestClient` (deprecation warning, §11.4) | — (allowed extra) |
+| pytest | 9.2.0 | dev | Test runner | — (fixed) |
+| pytest-cov | 7.1.0 | dev | Coverage + `--cov-fail-under=85` | — (fixed) |
+| ruff | 0.17.4 | dev | Lint + format check (incl. complexity rules) | radon (not allowed) |
+| mypy | 2.4.1 | dev | `--strict` type checking | pyright (not in owner's list) |
 | *(none)* | — | — | Layer contracts → stdlib `ast` test (§11.3) | import-linter (not allowed) |
 | *(none)* | — | — | Config → frozen dataclass (§1) | pydantic-settings (not allowed) |
 | *(none)* | — | — | Build backend → none, `src` on path via config (§10.3) | uv_build / hatchling |
@@ -147,12 +159,14 @@ class Settings:
     db_path: Path
 
     @classmethod
-    def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
-        """environ defaults to os.environ. Missing or empty LINKS_DB_PATH -> DEFAULT_DB_PATH."""
+    def from_env(cls, environ: Mapping[str, str] | None = None) -> Self:   # typing.Self
+        """environ defaults to os.environ (`if environ is None`). Value is .strip()ped;
+        missing or blank LINKS_DB_PATH -> DEFAULT_DB_PATH, else Path(stripped value)."""
 ```
 
 ### §1.5 Errors and edge cases
-- Empty / whitespace-only `LINKS_DB_PATH` → default (strip before checking).
+- Empty / whitespace-only `LINKS_DB_PATH` → default (strip before checking). A non-blank value
+  is used stripped (`"  /x/links.db "` → `/x/links.db`).
 - No validation that the path is writable here; §4 fails loudly at startup if it is not.
 
 ## §2 Domain
@@ -177,13 +191,13 @@ class Link:
     created_at: datetime                          # timezone-aware UTC, microsecond == 0
 
 class LinkNotFoundError(Exception):               # code unknown or not a valid code
-    def __init__(self, code: str) -> None: ...    # keeps .code
+    def __init__(self, code: str) -> None: ...    # message "link not found: <code>"; keeps .code
 
 class DuplicateCodeError(Exception):              # raised by a LinkRepository.add on PK clash
-    def __init__(self, code: str) -> None: ...
+    def __init__(self, code: str) -> None: ...    # message "duplicate code: <code>"; keeps .code
 
 class CodeGenerationError(Exception):             # service gave up after max_attempts collisions
-    def __init__(self, attempts: int) -> None: ...
+    def __init__(self, attempts: int) -> None: ...  # keeps .attempts
 
 Clock = Callable[[], datetime]
 
@@ -227,6 +241,8 @@ class RandomCodeGenerator:
 
 ### §4.1 Interfaces / signatures
 ```python
+BUSY_TIMEOUT_SECONDS: Final = 5.0
+
 SCHEMA_SQL: Final = """
 CREATE TABLE IF NOT EXISTS links (
     code       TEXT    PRIMARY KEY NOT NULL,
@@ -237,10 +253,12 @@ CREATE TABLE IF NOT EXISTS links (
 """
 
 def connect(db_path: Path) -> sqlite3.Connection:
-    """sqlite3.connect(db_path, isolation_level=None, check_same_thread=False, timeout=5.0)"""
+    """sqlite3.connect(db_path, isolation_level=None, check_same_thread=False,
+    timeout=BUSY_TIMEOUT_SECONDS)"""
 
 def init_schema(db_path: Path) -> None:
-    """mkdir(parents=True, exist_ok=True) on db_path.parent; connect; execute SCHEMA_SQL; close."""
+    """mkdir(parents=True, exist_ok=True) on db_path.parent; connect; execute SCHEMA_SQL;
+    close in a `finally`."""
 ```
 
 ### §4.3 Data / schema owned
@@ -261,7 +279,7 @@ No migrations: the schema is created once with `IF NOT EXISTS`; later schema cha
 - `check_same_thread=False` is **required**: FastAPI may enter a sync `yield` dependency (§8)
   in one threadpool thread and run the endpoint in another. A connection is still only used by
   one request at a time, so this is safe.
-- `timeout=5.0`: concurrent writers wait on SQLite's lock instead of failing with `database is locked`.
+- `timeout=BUSY_TIMEOUT_SECONDS` (5.0): concurrent writers wait on SQLite's lock instead of failing with `database is locked`.
 - Default `TEXT` collation is `BINARY`, so `code` lookups are case-sensitive (SPEC F-2) with no extra work.
 - Unwritable path → `sqlite3.OperationalError` at startup (§9) — fail fast, no handling.
 
@@ -289,14 +307,15 @@ class SqliteLinkRepository:
 
 def _to_row_timestamp(value: datetime) -> str            # value.astimezone(UTC).strftime(TIMESTAMP_FORMAT)
 def _from_row_timestamp(value: str) -> datetime          # strptime(value, TIMESTAMP_FORMAT).replace(tzinfo=UTC)
-def _row_to_link(row: tuple[object, ...]) -> Link        # typed mapping with isinstance checks / str()/int()
+def _row_to_link(row: tuple[object, ...]) -> Link        # unpack 4 cols; isinstance(str/str/int/str) else TypeError
+# get_by_code passes tuple(row) from cursor.fetchone()
 ```
 
 ### §5.5 Errors and edge cases
 - Only `?` placeholders; never f-strings / `%` in SQL (SPEC §9).
 - `add` catches only `sqlite3.IntegrityError` (PK clash) → `DuplicateCodeError`. Other DB errors propagate (→ 500).
 - `increment_clicks` is a single statement, never read-modify-write → no lost clicks (HLD metric). Unknown code → `False`, nothing changes.
-- Row typing for `mypy --strict`: `cursor.fetchone()` returns `Any`; map explicitly in `_row_to_link`, return `Link`, never `Any`.
+- Row typing for `mypy --strict`: `cursor.fetchone()` returns `Any`; map explicitly in `_row_to_link`, return `Link`, never `Any`. A row whose column types don't match (only possible if the file was written by something else) raises `TypeError("unexpected column types in links row")` → 500; no coercion with `str()` / `int()`.
 - The repository does not close the connection; its owner (§9 provider) does.
 
 ## §6 Service (domain logic)
@@ -318,15 +337,16 @@ class LinkService:
     ) -> None: ...
 
     def create_link(self, url: str) -> Link:
-        """Up to max_attempts: code = generator.generate(); repository.add(Link(code, url, 0, now)).
-        DuplicateCodeError -> next attempt. Exhausted -> CodeGenerationError(max_attempts).
-        now = clock().astimezone(UTC).replace(microsecond=0). Returns the stored Link."""
+        """now = clock().astimezone(UTC).replace(microsecond=0), taken ONCE before the loop.
+        Up to max_attempts: code = generator.generate(); repository.add(Link(code, url, 0, now)).
+        DuplicateCodeError -> log warning, next attempt. Exhausted -> CodeGenerationError(max_attempts).
+        Returns the stored Link."""
 
     def resolve_and_count(self, code: str) -> str:
         """Returns the target URL after +1 click.
-        not is_valid_code(code) -> LinkNotFoundError (no DB call).
-        repository.increment_clicks(code) is False -> LinkNotFoundError.
-        Else repository.get_by_code(code).url (row cannot vanish: no deletion exists)."""
+        not is_valid_code(code) or repository.increment_clicks(code) is False
+            -> LinkNotFoundError (invalid code: no DB call).
+        Else return self.get_stats(code).url (re-reads the row through get_stats)."""
 
     def get_stats(self, code: str) -> Link:
         """Never changes clicks. Invalid or unknown code -> LinkNotFoundError."""
@@ -347,6 +367,7 @@ sequenceDiagram
         alt False
             S-->>R: raise LinkNotFoundError
         else True
+            S->>S: get_stats(code)
             S->>Repo: get_by_code(code)
             Repo-->>S: Link
             S-->>R: link.url
@@ -357,7 +378,8 @@ sequenceDiagram
 ### §6.5 Errors and edge cases
 - Same URL twice → two codes (no de-duplication, SPEC F-1). URL is stored unchanged; validation is §7's job.
 - Collision retry is bounded (10). `CodeGenerationError` is not mapped by routes → FastAPI 500 (practically unreachable at 62⁶).
-- If `get_by_code` returns `None` after a successful increment (impossible without deletion), raise `LinkNotFoundError` rather than `assert`.
+- If `get_by_code` returns `None` after a successful increment (impossible without deletion), `get_stats` raises `LinkNotFoundError` (no `assert`).
+- The `created_at` timestamp is computed once per `create_link` call, so all retry attempts share it.
 - Logging: `logger = logging.getLogger(__name__)`; `logger.info("link_created code=%s", code)` and on collision `logger.warning("code_collision code=%s attempt=%d", …)`. Never log URLs.
 
 ## §7 Schemas (HTTP models)
@@ -369,6 +391,10 @@ sequenceDiagram
 ```python
 MAX_URL_LENGTH: Final = 2048
 ALLOWED_SCHEMES: Final = frozenset({"http", "https"})
+_TIMESTAMP_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"   # same format as §5 TIMESTAMP_FORMAT (schemas may not import repository)
+
+def _has_forbidden_char(value: str) -> bool:      # §7.5 rule 3
+def _validate_http_url(value: str) -> None:       # §7.5 rules 4-6; raises ValueError
 
 class CreateLinkRequest(BaseModel):
     url: Annotated[str, Field(strict=True, min_length=1, max_length=MAX_URL_LENGTH)]
@@ -376,7 +402,8 @@ class CreateLinkRequest(BaseModel):
     @field_validator("url")
     @classmethod
     def _check_url(cls, value: str) -> str:
-        """Returns value UNCHANGED or raises ValueError (-> 422). See §7.5 rules."""
+        """Rule 3 via _has_forbidden_char, then _validate_http_url; returns value UNCHANGED
+        or raises ValueError (-> 422). See §7.5 rules."""
 
 class CreateLinkResponse(BaseModel):
     code: str
@@ -389,7 +416,7 @@ class LinkStats(BaseModel):
 
     @field_serializer("created_at")
     def _serialize_created_at(self, value: datetime) -> str:
-        """value.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')"""
+        """value.astimezone(UTC).strftime(_TIMESTAMP_FORMAT)"""
 ```
 
 ### §7.2 Contracts (shapes only; endpoints in §8.2)
@@ -407,7 +434,8 @@ Rejected with `422` (FastAPI's standard validation body), nothing stored:
 4. `urllib.parse.urlsplit(value)` raises `ValueError` (e.g. `http://[::1`), or accessing `.port` raises `ValueError` (e.g. `http://host:99999`).
 5. `scheme.lower()` not in `ALLOWED_SCHEMES` (`ftp:`, `javascript:`, `data:`, `not a url` → no scheme).
 6. `hostname` is empty / `None` (`http://`, `https:///path`).
-- Valid input is returned unchanged (no normalisation, SPEC F-1). Keep the validator ≤ 40 lines by splitting into small private helpers if needed.
+- Valid input is returned unchanged (no normalisation, SPEC F-1). As built, the rules are split into the two private helpers in §7.1 to keep each function small.
+- Error messages (inside FastAPI's 422 body): "url must not contain whitespace or control characters", "url is malformed", "url scheme must be http or https", "url must include a host".
 
 ## §8 Routes (HTTP layer)
 - **Responsibility:** map HTTP to §6 calls, build `short_url`, translate `LinkNotFoundError` to 404.
@@ -506,7 +534,7 @@ sequenceDiagram
 
 ## §10 Run, tooling and project files
 - **Responsibility:** one-command start, the quality gate, and tool configuration.
-- **Path(s):** `start.sh`, `scripts/check.sh`, `pyproject.toml`, `.python-version`, `.env.example`, `.gitignore`, `README.md`
+- **Path(s):** `start.sh`, `scripts/check.sh`, `scripts/git-hooks/pre-commit`, `pyproject.toml`, `.python-version`, `.env.example`, `.gitignore`, `README.md`
 - **Depends on:** §9 (`create_app` factory path).
 
 ### §10.1 `start.sh` (executable, `chmod +x`)
@@ -541,16 +569,13 @@ fi
 ```
 Layer contracts and complexity run inside these commands (§11.3 test; ruff C901/PLR).
 
-### §10.3 `pyproject.toml` tool configuration (required values)
+### §10.3 `pyproject.toml` tool configuration (as built)
 ```toml
 [project]
 name = "bench-link-shortener"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi==0.116.1", "uvicorn==0.35.0"]
-
-[dependency-groups]
-dev = ["httpx==0.28.1", "pytest==8.4.1", "pytest-cov==6.2.1", "ruff==0.12.4", "mypy==1.17.0"]
+dependencies = ["fastapi>=0.162.2", "uvicorn>=0.54.0"]          # floors; exact versions in uv.lock (D-05)
 
 [tool.uv]
 package = false                      # virtual project: no build backend
@@ -559,6 +584,7 @@ package = false                      # virtual project: no build backend
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = ["docs"]            # ruff >= 0.17 also formats Markdown; docs/ is not code
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C90", "PL", "RUF"]
@@ -590,6 +616,9 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
+
+[dependency-groups]                  # placed last by `uv add --dev`
+dev = ["httpx>=0.28.1", "mypy>=2.4.1", "pytest>=9.2.0", "pytest-cov>=7.1.0", "ruff>=0.17.4"]
 ```
 (`files` lets the bare `uv run mypy --strict` from SPEC §12 work.)
 
@@ -599,7 +628,20 @@ show_missing = true
 - `.gitignore`: add `links.db`, `*.db`, `*.db-journal`, `.coverage`, `htmlcov/`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `__pycache__/`.
 
 ### §10.5 README.md (docs agent)
-Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), Run (`./start.sh`, `PORT=9000 ./start.sh`, `LINKS_DB_PATH`), API (three endpoints with the SPEC §5 curl examples), Test (`uv run pytest --cov=link_shortener`), Lint/format (`uv run ruff check .`, `uv run ruff format --check .`), Types (`uv run mypy --strict`), Full gate (`scripts/check.sh`), Layout (routes → service → repository).
+Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), Run (`./start.sh`, `PORT=9000 ./start.sh`, `LINKS_DB_PATH`), API (three endpoints with the SPEC §5 curl examples), Test (`uv run pytest --cov=link_shortener`), Lint/format (`uv run ruff check .`, `uv run ruff format --check .`), Types (`uv run mypy --strict`), Full gate (`scripts/check.sh`), Pre-commit hook (`git config core.hooksPath scripts/git-hooks`, §10.6), Layout (routes → service → repository).
+
+### §10.6 Pre-commit hook (new at M1, added by env-setup)
+`scripts/git-hooks/pre-commit` — a plain bash script (no `pre-commit` package), enabled per
+clone with `git config core.hooksPath scripts/git-hooks`:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy --strict
+```
+It runs the fast half of §10.2 only; tests and coverage stay in `scripts/check.sh`.
 
 ## §11 Tests
 - **Responsibility:** prove every SPEC §5 row, the layer contracts and the quality bar.
@@ -619,8 +661,16 @@ Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), R
 | `test_api_create.py` | `201` body shape, 6-char code, `short_url` uses base URL (TestClient `base_url="http://localhost:9000"` → port 9000), `{}` / `not a url` / ftp / malformed JSON → `422` and nothing stored |
 | `test_api_redirect.py` | `307` + `Location` (`follow_redirects=False`), clicks 0→1→2, unknown 6-char code → `404` body, non-code path (`/abc`, `/links`) → `404`, case-sensitivity |
 | `test_api_stats.py` | `200` body with `created_at` format, unknown → `404`, stats don't count clicks |
-| `test_persistence.py` | US-06: app A creates + 2 clicks on a tmp file; new `create_app` on the same file → stats `clicks: 2`, redirect still works |
+| `test_api_edge.py` | 300 POSTs → 300 distinct codes; 7-char path → `404`; wrong-case code → `404` on stats and redirect with no click; `/zzzzzz`, `/abc`, `/links` leave an existing link's clicks at 0 (checked in SQLite); `{"url": 5}` and a JSON array body → `422` |
+| `test_persistence.py` | US-06: app A creates + 2 clicks on a tmp file; new `create_app` on the same file → stats `clicks: 2`, redirect still works; importing `link_shortener.main` creates no `links.db` |
 | `test_architecture.py` | §0.3 contracts (§11.3) |
+
+Beyond the design, as built the tests also cover: `Settings` immutability and stripping
+(`test_config`), `Link` immutability and error payloads (`test_domain`), autocommit,
+cross-thread use, `CHECK clicks >= 0` and unwritable path (`test_db`), SQL-injection-shaped
+code, UTC round trip, codes differing only by case coexisting (`test_repository`), retry
+boundary (10th attempt succeeds; exhaustion consumes exactly 10 codes) (`test_service`), IPv6
+hosts, explicit ports, uppercase scheme, length boundary 2048/2049 (`test_schemas`).
 
 ### §11.2 Fixtures and fakes
 ```python
@@ -628,13 +678,14 @@ Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), R
 @pytest.fixture
 def db_path(tmp_path: Path) -> Path                   # tmp_path / "links.db"
 @pytest.fixture
-def client(db_path: Path) -> Iterator[TestClient]     # with TestClient(create_app(Settings(db_path)), follow_redirects=False) as c: yield c
+def client(db_path: Path) -> Iterator[TestClient]     # with TestClient(create_app(Settings(db_path)),
+                                                      #   base_url="http://localhost:9000", follow_redirects=False) as c: yield c
 @pytest.fixture
 def connection(db_path: Path) -> Iterator[sqlite3.Connection]   # init_schema + connect, closed after
 
 # tests/fakes.py
-class InMemoryLinkRepository: ...     # implements §2 LinkRepository with a dict; counts increments
-class SequenceCodeGenerator: ...      # returns the given codes in order
+class InMemoryLinkRepository: ...     # implements §2 LinkRepository with a dict; .increment_calls counts successful increments
+class SequenceCodeGenerator: ...      # __init__(codes: Sequence[str]); returns them in order (StopIteration when exhausted)
 FIXED_NOW: Final = datetime(2026, 11, 9, 10, 0, 0, tzinfo=UTC)
 def fixed_clock() -> datetime: ...
 ```
@@ -645,11 +696,35 @@ def fixed_clock() -> datetime: ...
 `tests/test_architecture.py`: for each module in the §0.3 table, parse `src/link_shortener/<module>.py`
 with `ast`, collect every `Import` / `ImportFrom` (absolute, including inside functions and
 `TYPE_CHECKING` blocks), and assert: (a) internal imports ⊆ the allowed set; (b) no forbidden
-top-level package/module is imported. One parametrised test per module, named
-`test_architecture_<module>_imports_respect_layer_map`. A new module under `src/link_shortener/`
-that is missing from the contract table fails the test (forces a design update).
+top-level package/module is imported. As built there are three tests:
+- `test_architecture_module_imports_respect_layer_map[<module>]` — one parametrised case per
+  module in the `CONTRACTS` dict (the §0.3 table); relative imports are a violation (§0.3).
+- `test_architecture_contract_covers_every_module` — the set of `src/link_shortener/*.py`
+  modules (minus `__init__`) must equal the contract keys, so a new module forces a design update.
+- `test_architecture_checker_detects_a_violation` — self-test of the AST collector on a bad file.
+
+### §11.4 Known issues (as built, M1)
+- Starlette warns that the httpx-based transport behind `TestClient` is deprecated. It is a
+  warning only (pytest warnings summary); tests pass and `scripts/check.sh` is green (T-03 result).
+  No package change at M1; replacing the test transport would be a Tier 1 decision.
+- Some M1 test names (`test_service.py`, `test_schemas.py`, `test_persistence.py`) are short
+  (`test_collision_retries`) rather than the `test_<unit>_<condition>_<expected>` form in
+  CONVENTIONS §5. Cosmetic; candidate for a Tier 2 rename in a later task.
 
 ## Changes since last milestone
 | Milestone | Section | Change | Why | Ref |
 |---|---|---|---|---|
 | — | — | Initial LLD | — | HLD approved |
+| M1 | §0.4, §10.3 | Package pins `==` → `>=` floors; versions updated to uv.lock (fastapi 0.162.2, uvicorn 0.54.0, httpx 0.28.1, pytest 9.2.0, pytest-cov 7.1.0, ruff 0.17.4, mypy 2.4.1) | Owner chose latest resolved versions at lock time | D-05 |
+| M1 | §10.3 | `[tool.ruff] extend-exclude = ["docs"]`; `[dependency-groups]` moved to end of file | ruff 0.17 formats Markdown, which broke `ruff format --check`; uv writes the group last | env-setup |
+| M1 | §0.2, §10, §10.5, §10.6 (new) | Pre-commit hook `scripts/git-hooks/pre-commit` (bash, ruff + format + mypy) via `core.hooksPath` | No `pre-commit` package allowed; keep the gate local | env-setup |
+| M1 | §0.1, §0.4, §11.4 (new) | Known issue: Starlette deprecation warning for httpx `TestClient` transport | Upstream deprecation; no package change | T-03 |
+| M1 | §0.3, §11.3 | Contract table lives in `CONTRACTS` dict; relative imports forbidden; test names as built + coverage and self-test | Implementation detail of the layer test | T-01 |
+| M1 | §1.1, §1.5 | `from_env` returns `typing.Self`; non-blank value is used stripped | Idiomatic 3.12 typing; consistent stripping | T-01 |
+| M1 | §2.1 | Error messages and kept attributes (`.code`, `.attempts`) documented | Match code | T-01 |
+| M1 | §4.1, §4.5 | `BUSY_TIMEOUT_SECONDS: Final = 5.0` named constant; `init_schema` closes in `finally` | No magic constants (CONVENTIONS §5) | T-01 |
+| M1 | §5.1, §5.5 | `_row_to_link` raises `TypeError` on unexpected column types (no `str()`/`int()` coercion) | Strict typing without silent coercion | T-01 |
+| M1 | §6.1, §6.4, §6.5 | `resolve_and_count` reads the URL via `get_stats`; `now` taken once before the retry loop | Removes duplicated not-found logic | T-02 |
+| M1 | §7.1, §7.5 | Private helpers `_has_forbidden_char`, `_validate_http_url`; local `_TIMESTAMP_FORMAT`; error messages listed | Small functions; schemas may not import repository (§0.3) | T-02 |
+| M1 | §0.2, §11.1 | New `tests/test_api_edge.py`; extra tests listed per file | Tester added edge-case coverage | T-03 |
+| M1 | §11.2 | `client` fixture uses `base_url="http://localhost:9000"`; fake details | Proves `short_url` uses request base URL | T-03 |
