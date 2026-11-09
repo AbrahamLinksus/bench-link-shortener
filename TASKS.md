@@ -19,14 +19,14 @@ instance on the same file, and the layer contracts are enforced by a test.
 - Owner: backend-coder (tests: tester)
 - Depends on: —
 - Context: SPEC US-03, US-04, US-06 · LLD §0.2, §0.3, §1, §2, §3, §4, §5, §11.1 (rows test_config … test_repository, test_architecture), §11.2 (`db_path`, `connection` fixtures only), §11.3 · files: src/link_shortener/{config,domain,codes,db,repository}.py, tests/*, pyproject.toml
-- Status: Backlog
+- Status: Done
 - Acceptance criteria:
-  - [ ] `tests/test_smoke.py` is deleted; `config.py`, `domain.py`, `codes.py`, `db.py`, `repository.py` implement the signatures in LLD §1.1, §2.1, §3.1, §4.1, §5.1 (other modules stay empty).
-  - [ ] `test_repository.py` passes, including add/get round trip with `created_at`, duplicate → `DuplicateCodeError`, case-sensitive lookup, and the concurrency test (8 threads × 25 increments → `clicks == 200`).
-  - [ ] Reopening the same SQLite file with a new connection returns the stored link and click count (test passes).
-  - [ ] `tests/test_architecture.py` has one parametrised test per module in the LLD §0.3 table, and all of them pass.
-  - [ ] `scripts/check.sh` exits 0 with coverage ≥ 85%.
-- Result:
+  - [x] `tests/test_smoke.py` is deleted; `config.py`, `domain.py`, `codes.py`, `db.py`, `repository.py` implement the signatures in LLD §1.1, §2.1, §3.1, §4.1, §5.1 (other modules stay empty).
+  - [x] `test_repository.py` passes, including add/get round trip with `created_at`, duplicate → `DuplicateCodeError`, case-sensitive lookup, and the concurrency test (8 threads × 25 increments → `clicks == 200`).
+  - [x] Reopening the same SQLite file with a new connection returns the stored link and click count (test passes).
+  - [x] `tests/test_architecture.py` has one parametrised test per module in the LLD §0.3 table, and all of them pass.
+  - [x] `scripts/check.sh` exits 0 with coverage ≥ 85%.
+- Result: approved 2026-11-09 · main ba78ad4 · 97.9% cov, 56 tests · review 0C/0M/3 minor
 
 ### T-02 · Domain logic and HTTP models: service and schemas
 - Owner: backend-coder (tests: tester)

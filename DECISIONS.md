@@ -9,6 +9,7 @@
 | D-04 | 2026-11-09 | Build team | backend-coder, tester, reviewer, debugger, docs | + devops | plan |
 | D-05 | 2026-11-09 | Package versions | Latest at `uv lock` (same packages as LLD table) | Architect's exact pins | plan |
 | D-06 | 2026-11-09 | LLD + conventions + packages | Approved | — | plan |
+| D-07 | 2026-11-09 | T-01 result | Approved | — | T-01 |
 
 ## Tier 2 — decided by agents (overrule any time)
 | ID | Date | Decision | Chosen | Agent | Task |
