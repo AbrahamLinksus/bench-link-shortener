@@ -7,8 +7,8 @@
 | Problem | Link shortener API (FastAPI + SQLite): shorten, redirect with click count, stats |
 | Repo | AbrahamLinksus/bench-link-shortener (public) |
 | Stage | 7 Build |
-| Milestone | M1 · Working API (1/3 tasks) |
-| Next step | T-02 · backend-coder · service + schemas |
+| Milestone | M1 · Working API (2/3 tasks) |
+| Next step | T-03 · backend-coder · routes + app factory |
 | Last updated | 2026-11-09 |
 
 ## Team

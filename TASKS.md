@@ -32,14 +32,14 @@ instance on the same file, and the layer contracts are enforced by a test.
 - Owner: backend-coder (tests: tester)
 - Depends on: T-01
 - Context: SPEC US-01, US-02, US-03, US-04, US-05 · LLD §2.1, §6, §7, §11.1 (rows test_service, test_schemas), §11.2 (`tests/fakes.py`) · files: src/link_shortener/{domain,service,schemas}.py, tests/fakes.py, tests/test_service.py, tests/test_schemas.py
-- Status: Backlog
+- Status: Done
 - Acceptance criteria:
-  - [ ] `tests/fakes.py` provides `InMemoryLinkRepository`, `SequenceCodeGenerator`, `FIXED_NOW` / `fixed_clock` (LLD §11.2), with no patching of production modules.
-  - [ ] `test_service.py` passes: with `SequenceCodeGenerator(["aaaaaa","aaaaaa","bbbbbb"])` a second link gets `bbbbbb`; 10 collisions → `CodeGenerationError`; `resolve_and_count` increments exactly once; invalid or unknown code → `LinkNotFoundError` with no increment; `get_stats` leaves clicks unchanged.
-  - [ ] `test_schemas.py` passes for every LLD §7.5 rule: valid http/https URL returned unchanged; `ftp://…`, `javascript:…`, `not a url`, `http://`, embedded space, 2049 chars, `123`, `http://host:99999` → `ValidationError`.
-  - [ ] `LinkStats` serialises `created_at` as `2026-11-09T10:00:00Z` (test passes).
-  - [ ] `scripts/check.sh` exits 0 with coverage ≥ 85%.
-- Result:
+  - [x] `tests/fakes.py` provides `InMemoryLinkRepository`, `SequenceCodeGenerator`, `FIXED_NOW` / `fixed_clock` (LLD §11.2), with no patching of production modules.
+  - [x] `test_service.py` passes: with `SequenceCodeGenerator(["aaaaaa","aaaaaa","bbbbbb"])` a second link gets `bbbbbb`; 10 collisions → `CodeGenerationError`; `resolve_and_count` increments exactly once; invalid or unknown code → `LinkNotFoundError` with no increment; `get_stats` leaves clicks unchanged.
+  - [x] `test_schemas.py` passes for every LLD §7.5 rule: valid http/https URL returned unchanged; `ftp://…`, `javascript:…`, `not a url`, `http://`, embedded space, 2049 chars, `123`, `http://host:99999` → `ValidationError`.
+  - [x] `LinkStats` serialises `created_at` as `2026-11-09T10:00:00Z` (test passes).
+  - [x] `scripts/check.sh` exits 0 with coverage ≥ 85%.
+- Result: approved 2026-11-09 · main 273771e · 98.9% cov, 88 tests · review 0C/0M/3 minor
 
 ### T-03 · Endpoints and app factory: routes, main, API and persistence tests
 - Owner: backend-coder (tests: tester)
