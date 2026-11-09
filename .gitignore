@@ -1,0 +1,4 @@
+.env
+.results/
+.venv/
+node_modules/
