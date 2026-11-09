@@ -94,3 +94,7 @@ data, and every SPEC §12 box can be ticked (README is written in the milestone-
 - Status: Approved 2026-11-09 · built as T-04b (main ad2e64a) · Done
 - Problem: start.sh sources `.env` after the shell environment, so `PORT` / `LINKS_DB_PATH` in `.env` override `PORT=9000 ./start.sh`, contrary to SPEC US-07 / F-4 ("`$PORT` if set").
 - Wanted: values set on the command line win; `.env` only fills in unset ones. Update LLD §10.1, add a cheap automated check, remove the README "Known edge case" caveat.
+
+## Handover
+- Status: Done
+- Result: approved 2026-11-09 · main 4baaa7d · CI green (run 42630616905) · doc path check 0C/1M/4m → M + 2 minors fixed

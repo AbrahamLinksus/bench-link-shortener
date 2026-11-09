@@ -18,6 +18,7 @@
 | D-13 | 2026-11-09 | .env PORT overrides shell PORT in start.sh | Fix: shell wins (CR-1) | keep, documented | M2-docs |
 | D-14 | 2026-11-09 | CR-1 "what changes" (LLD §10.1/§11.5, T-04 → T-04b) | Approve | request changes / cancel CR | CR-1 |
 | D-15 | 2026-11-09 | T-04b result card (4 minor review issues) | Approve; minors to handover notes | fix quick minors first / reject | T-04b |
+| D-16 | 2026-11-09 | Handover (CI, ARCHITECTURE, WALKTHROUGH, README) | Approve; stale refs + limitations stay documented | request changes | handover |
 
 ## Tier 2 — decided by agents (overrule any time)
 | ID | Date | Decision | Chosen | Agent | Task |

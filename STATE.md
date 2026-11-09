@@ -6,9 +6,9 @@
 |---|---|
 | Problem | Link shortener API (FastAPI + SQLite): shorten, redirect with click count, stats |
 | Repo | AbrahamLinksus/bench-link-shortener (public) |
-| Stage | 8 Handover |
-| Milestone | M1, M2 done (incl. CR-1 / T-04b) |
-| Next step | handover · devops CI → architect ARCHITECTURE.md + WALKTHROUGH.md (+ flip LLD CR-1 header to as-built) → docs README → reviewer path check |
+| Stage | Complete |
+| Milestone | M1, M2 done (incl. CR-1 / T-04b) · handover approved |
+| Next step | none — project complete (main 4baaa7d). Optional follow-ups: start.sh "README.md (Install)" message → "Requirements"; .results/ diagram refs in HLD/LLD; known limitations in docs/ARCHITECTURE.md |
 | Last updated | 2026-11-09 |
 
 ## Team
@@ -39,8 +39,10 @@ Context gaps agents reported (`Context gap:` in a REPORT). The Orchestrator adds
 | Role | Also read | Why (from gap report) |
 |---|---|---|
 | reviewer | docs/SPEC.md §5 (API tasks) | T-03 review could not check §5 coverage without it |
+| architect | .results/<id>/ci-devops.md (handover) | handover architect had to grep it for CI test/coverage figures |
 
 ## Notes for the next session
+- Handover approved 2026-11-09 (main 4baaa7d): CI .github/workflows/ci.yml, docs/ARCHITECTURE.md, docs/WALKTHROUGH.md, README run/test/extend.
 - T-04b approved 2026-11-09 (main ad2e64a). Review minors to carry into handover/known limitations: (1) start.sh falls back to .env-wins silently if `compgen` is missing (needs LLD change to guard); (2) LLD §10.1 "readonly never differs" note wrong for SHELLOPTS/BASHOPTS if .env runs set/shopt; (3) README:114 should say "exported in the shell or passed on the command line"; (4) no test for set-but-empty PORT.
 - Owner: Jake · Approval mode: batch-low-risk · Cost mode: balanced
 - M1 approved 2026-11-09 (main dcff4e1). Resume with `/setup-project resume bench-link-shortener`.
