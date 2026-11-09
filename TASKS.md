@@ -8,7 +8,7 @@ Status: Backlog → In progress → Review → Needs you → Done
 Every task: backend-coder writes the code, tester writes the tests listed in LLD §11.1 for
 that task's modules, and the task ends with `scripts/check.sh` passing (ruff, format,
 `mypy --strict`, pytest with coverage ≥ 85%). Package versions are the ones in `uv.lock`
-(env-setup); the pins in LLD §0.4 / §10.3 are stale and must not be changed back.
+(env-setup); LLD §0.4 was re-checked against it at M2 and matches.
 
 ## M1 · Working API (shorten, redirect, stats, persistence)
 Outcome: all three endpoints behave as in SPEC §5 under TestClient, data survives a new app
@@ -71,3 +71,13 @@ data, and every SPEC §12 box can be ticked (README is written in the milestone-
   - [x] With `uv` absent from `PATH`, `./start.sh` exits non-zero and prints the message pointing to README.md.
   - [x] `scripts/check.sh` exits 0 with coverage ≥ 85%, and no server process is left running.
 - Result: approved 2026-11-09 · main 92a72c0 · 99.18% cov, 111 tests · review 0C/0M/0 minor
+
+### M2-docs · Milestone M2 as-built sync + README
+- Status: Done
+- Result: approved 2026-11-09 · main 9b961b0 · LLD header/§0.2/§0.4/§10.1/§10.4 synced · README rewritten for ./start.sh
+
+## Change requests
+### CR-1 · Shell environment wins over .env in start.sh
+- Status: Approved by owner 2026-11-09 (D-13) — to run next, before handover
+- Problem: start.sh sources `.env` after the shell environment, so `PORT` / `LINKS_DB_PATH` in `.env` override `PORT=9000 ./start.sh`, contrary to SPEC US-07 / F-4 ("`$PORT` if set").
+- Wanted: values set on the command line win; `.env` only fills in unset ones. Update LLD §10.1, add a cheap automated check, remove the README "Known edge case" caveat.

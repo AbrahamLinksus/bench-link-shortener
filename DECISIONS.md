@@ -14,6 +14,8 @@
 | D-09 | 2026-11-09 | T-03 result | Approved | — | T-03 |
 | D-10 | 2026-11-09 | Milestone M1 (LLD sync + README) | Approved + continue in fresh session | continue here | M1-docs |
 | D-11 | 2026-11-09 | T-04 result card (start.sh) | Approve | — | T-04 |
+| D-12 | 2026-11-09 | Milestone M2 (LLD sync + README) | Approve + continue in fresh session | continue here / request changes | M2-docs |
+| D-13 | 2026-11-09 | .env PORT overrides shell PORT in start.sh | Fix: shell wins (CR-1) | keep, documented | M2-docs |
 
 ## Tier 2 — decided by agents (overrule any time)
 | ID | Date | Decision | Chosen | Agent | Task |
