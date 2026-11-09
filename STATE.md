@@ -6,9 +6,9 @@
 |---|---|
 | Problem | Link shortener API (FastAPI + SQLite): shorten, redirect with click count, stats |
 | Repo | AbrahamLinksus/bench-link-shortener (public) |
-| Stage | 7 Build |
-| Milestone | M2 · Run and ship (2/3 tasks: T-04b added by CR-1) — M1 done |
-| Next step | T-04b · backend-coder · start.sh shell-wins + tests/test_start_script.py + README fix — then LLD header as-built note, then handover |
+| Stage | 8 Handover |
+| Milestone | M1, M2 done (incl. CR-1 / T-04b) |
+| Next step | handover · devops CI → architect ARCHITECTURE.md + WALKTHROUGH.md (+ flip LLD CR-1 header to as-built) → docs README → reviewer path check |
 | Last updated | 2026-11-09 |
 
 ## Team
@@ -41,6 +41,7 @@ Context gaps agents reported (`Context gap:` in a REPORT). The Orchestrator adds
 | reviewer | docs/SPEC.md §5 (API tasks) | T-03 review could not check §5 coverage without it |
 
 ## Notes for the next session
+- T-04b approved 2026-11-09 (main ad2e64a). Review minors to carry into handover/known limitations: (1) start.sh falls back to .env-wins silently if `compgen` is missing (needs LLD change to guard); (2) LLD §10.1 "readonly never differs" note wrong for SHELLOPTS/BASHOPTS if .env runs set/shopt; (3) README:114 should say "exported in the shell or passed on the command line"; (4) no test for set-but-empty PORT.
 - Owner: Jake · Approval mode: batch-low-risk · Cost mode: balanced
 - M1 approved 2026-11-09 (main dcff4e1). Resume with `/setup-project resume bench-link-shortener`.
 - T-04 approved 2026-11-09 (main 92a72c0). M2 approved 2026-11-09 (main 9b961b0); owner chose a fresh session.

@@ -80,16 +80,17 @@ data, and every SPEC §12 box can be ticked (README is written in the milestone-
 - Owner: backend-coder (tests: tester)
 - Depends on: T-04, M2-docs
 - Context: SPEC US-07, F-4, §5 (F-4 row), §12 · LLD §0.5, §10.1, §10.4, §10.5, §11.1 (row test_start_script), §11.5 · files: start.sh, .env.example, tests/test_start_script.py, README.md
-- Status: Backlog
+- Status: Done
 - Acceptance criteria:
-  - [ ] `start.sh` matches LLD §10.1 (only the `.env` block replaced; `uv` check, `uv sync` and `exec uv run uvicorn …` unchanged) and is still executable (`ls -l` shows `x`).
-  - [ ] Run check in a temporary directory, never in the worktree: copy the project into a temp dir (e.g. `cp -r` of the worktree without `.venv/`, or `start.sh` copied plus `src/`, `pyproject.toml`, `uv.lock`, `.python-version` symlinked) and `cp .env.example .env` there (`PORT=8000`). From that copy, `PORT=9000 ./start.sh` serves on 9000 and a `curl` POST returns `short_url` starting `http://localhost:9000/`; plain `./start.sh` serves on 8000. Both runs are captured to `.results/T-04b/`, no server is left running, and the worktree still has no `.env` (`ls -a` shows none).
-  - [ ] `tests/test_start_script.py` has the three LLD §11.5 tests (shell overrides `.env` incl. the byte-for-byte `LINKS_DB_PATH`, `.env` fills unset vars, no `.env` → `--port 8000`), and all of them pass. The shell-overrides test fails when run against the pre-CR-1 `start.sh` (temp copy of `git show main:start.sh`; output captured).
-  - [ ] README (edited by backend-coder): `grep -nE "Known edge case|override values you set in the shell" README.md` prints nothing, and Run has a one-line precedence note (command line → `.env` → default) per LLD §10.5.
-  - [ ] With `uv` absent from `PATH`, `./start.sh` still exits non-zero with the README message. `scripts/check.sh` exits 0 with coverage ≥ 85%.
+  - [x] `start.sh` matches LLD §10.1 (only the `.env` block replaced; `uv` check, `uv sync` and `exec uv run uvicorn …` unchanged) and is still executable (`ls -l` shows `x`).
+  - [x] Run check in a temporary directory, never in the worktree: copy the project into a temp dir (e.g. `cp -r` of the worktree without `.venv/`, or `start.sh` copied plus `src/`, `pyproject.toml`, `uv.lock`, `.python-version` symlinked) and `cp .env.example .env` there (`PORT=8000`). From that copy, `PORT=9000 ./start.sh` serves on 9000 and a `curl` POST returns `short_url` starting `http://localhost:9000/`; plain `./start.sh` serves on 8000. Both runs are captured to `.results/T-04b/`, no server is left running, and the worktree still has no `.env` (`ls -a` shows none).
+  - [x] `tests/test_start_script.py` has the three LLD §11.5 tests (shell overrides `.env` incl. the byte-for-byte `LINKS_DB_PATH`, `.env` fills unset vars, no `.env` → `--port 8000`), and all of them pass. The shell-overrides test fails when run against the pre-CR-1 `start.sh` (temp copy of `git show main:start.sh`; output captured).
+  - [x] README (edited by backend-coder): `grep -nE "Known edge case|override values you set in the shell" README.md` prints nothing, and Run has a one-line precedence note (command line → `.env` → default) per LLD §10.5.
+  - [x] With `uv` absent from `PATH`, `./start.sh` still exits non-zero with the README message. `scripts/check.sh` exits 0 with coverage ≥ 85%.
+- Result: approved 2026-11-09 · main ad2e64a · 115 tests, 99.18% cov · review 0C/0M/4 minor (in handover notes)
 
 ## Change requests
 ### CR-1 · Shell environment wins over .env in start.sh
-- Status: Approved 2026-11-09 · planned as T-04b (M2)
+- Status: Approved 2026-11-09 · built as T-04b (main ad2e64a) · Done
 - Problem: start.sh sources `.env` after the shell environment, so `PORT` / `LINKS_DB_PATH` in `.env` override `PORT=9000 ./start.sh`, contrary to SPEC US-07 / F-4 ("`$PORT` if set").
 - Wanted: values set on the command line win; `.env` only fills in unset ones. Update LLD §10.1, add a cheap automated check, remove the README "Known edge case" caveat.
