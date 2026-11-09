@@ -9,8 +9,9 @@
 > Source: approved `docs/SPEC.md` and `docs/HLD.md`. Stack fixed by the owner (`docs/owner-spec.md`).
 > Story IDs (US-xx) and flow IDs (F-x) refer to SPEC.
 >
-> **As-built status:** synced to the code at the end of M1 (T-01, T-02, T-03). §10.1 / §10.4
-> (`start.sh`, `.env.example`, `.gitignore`) and §10.5 (README) are still design-only (M2).
+> **As-built status:** synced to the code at the end of M2 (T-01 … T-04, main 92a72c0).
+> §10.1 / §10.4 (`start.sh`, `.env.example`, `.gitignore`) are as built (T-04). §10.5 (README)
+> is written by the M2 docs step and is not part of this sync.
 
 ## §0 Overview
 
@@ -36,7 +37,7 @@
 ├── uv.lock
 ├── .python-version           # 3.12
 ├── .env.example              # LINKS_DB_PATH, PORT (§0.5)
-├── .gitignore                # + links.db, *.db, .coverage, htmlcov/ (§10.4)
+├── .gitignore                # .env, .venv/, *.db (+ journal/WAL/SHM), coverage, caches (§10.4)
 ├── start.sh                  # §10.1 (executable)
 ├── scripts/
 │   ├── check.sh              # §10.2 (executable) quality gate
@@ -118,7 +119,9 @@ As built (owner decision D-05): `pyproject.toml` declares **lower bounds** (`>=`
 latest release at env-setup time) and `uv.lock` holds the exact resolved versions, including the
 transitive set (pydantic, starlette, anyio, … come in through FastAPI / httpx and are not listed
 directly). The versions below are the ones resolved in `uv.lock`; `uv.lock` is the source of
-truth and upgrades remain a Tier 1 decision.
+truth and upgrades remain a Tier 1 decision. Re-checked against `uv.lock` at the M2 sync: all
+seven direct packages match and the `pyproject.toml` floors equal the locked versions. (The
+note in TASKS.md that these pins are stale predates the M1 sync; they are no longer stale.)
 
 | Package | Version (uv.lock; `>=` floor in pyproject) | Group | Purpose | Alternative rejected |
 |---|---|---|---|---|
@@ -134,6 +137,10 @@ truth and upgrades remain a Tier 1 decision.
 | *(none)* | — | — | Build backend → none, `src` on path via config (§10.3) | uv_build / hatchling |
 
 Dev deps go in `[dependency-groups] dev = [...]` (uv default group, installed by `uv sync`).
+
+Notable transitive versions in `uv.lock` (not declared directly; listed for reference only,
+they move when the direct packages are upgraded): pydantic 2.14.3 (pydantic-core 2.50.4),
+starlette 1.10.0, anyio 4.16.0, h11 0.16.0, httpcore 1.0.9, coverage 7.17.2 (via pytest-cov).
 
 ### §0.5 Config and secrets
 | Env var | Default | Read by | Meaning |
@@ -537,7 +544,7 @@ sequenceDiagram
 - **Path(s):** `start.sh`, `scripts/check.sh`, `scripts/git-hooks/pre-commit`, `pyproject.toml`, `.python-version`, `.env.example`, `.gitignore`, `README.md`
 - **Depends on:** §9 (`create_app` factory path).
 
-### §10.1 `start.sh` (executable, `chmod +x`)
+### §10.1 `start.sh` (executable, `chmod +x`) — as built (T-04), identical to the design
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -552,6 +559,17 @@ exec uv run uvicorn link_shortener.main:create_app --factory --app-dir src \
   --host 0.0.0.0 --port "${PORT:-8000}"
 ```
 Port in use → uvicorn's own error and non-zero exit (SPEC F-4).
+
+Edge cases (as built):
+- `uv` missing from `PATH` → the message above on stderr, exit 1 (verified in T-04).
+- `exec` replaces the shell with `uv run`, so Ctrl+C / `kill` reaches uvicorn directly and no
+  wrapper shell is left behind.
+- `uv sync` installs the default `dev` group too (§0.4), so a fresh clone can also run §10.2.
+- **`.env` wins over the caller's environment.** `.env` is sourced *after* the process starts,
+  so a `.env` containing `PORT=8000` (e.g. a straight copy of `.env.example`) overrides
+  `PORT=9000 ./start.sh`; the same applies to `LINKS_DB_PATH`. Without a `.env` (the fresh-clone
+  case in SPEC F-4 / US-07) the command-line value is used. Not changed at M2; the README
+  should say so (see Changes table).
 
 ### §10.2 `scripts/check.sh` (executable) — the quality gate
 ```bash
@@ -624,8 +642,14 @@ dev = ["httpx>=0.28.1", "mypy>=2.4.1", "pytest>=9.2.0", "pytest-cov>=7.1.0", "ru
 
 ### §10.4 Other files
 - `.python-version`: `3.12`.
-- `.env.example`: `LINKS_DB_PATH=links.db` and `PORT=8000`, each with a one-line comment.
-- `.gitignore`: add `links.db`, `*.db`, `*.db-journal`, `.coverage`, `htmlcov/`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `__pycache__/`.
+- `.env.example` (as built): `LINKS_DB_PATH=links.db` and `PORT=8000`, each preceded by a
+  one-line comment (`# SQLite file path (relative to the working dir)`, `# uvicorn port used by start.sh`).
+- `.gitignore` (as built), in file order: `.env`, `.results/`, `.venv/`, `node_modules/`,
+  `links.db`, `*.db`, `*.db-journal`, `*.db-wal`, `*.db-shm`, `.coverage`, `.coverage.*`,
+  `htmlcov/`, `.mypy_cache/`, `.ruff_cache/`, `.pytest_cache/`, `__pycache__/`, `*.pyc`.
+  Beyond the design list this adds `.env` (§0.5), `.results/` (agent evidence), `.venv/`,
+  `node_modules/` (team template), the SQLite WAL/SHM side files, parallel-coverage data files
+  and `*.pyc`. `links.db` shows as ignored in `git status` (T-04).
 
 ### §10.5 README.md (docs agent)
 Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), Run (`./start.sh`, `PORT=9000 ./start.sh`, `LINKS_DB_PATH`), API (three endpoints with the SPEC §5 curl examples), Test (`uv run pytest --cov=link_shortener`), Lint/format (`uv run ruff check .`, `uv run ruff format --check .`), Types (`uv run mypy --strict`), Full gate (`scripts/check.sh`), Pre-commit hook (`git config core.hooksPath scripts/git-hooks`, §10.6), Layout (routes → service → repository).
@@ -728,3 +752,7 @@ top-level package/module is imported. As built there are three tests:
 | M1 | §7.1, §7.5 | Private helpers `_has_forbidden_char`, `_validate_http_url`; local `_TIMESTAMP_FORMAT`; error messages listed | Small functions; schemas may not import repository (§0.3) | T-02 |
 | M1 | §0.2, §11.1 | New `tests/test_api_edge.py`; extra tests listed per file | Tester added edge-case coverage | T-03 |
 | M1 | §11.2 | `client` fixture uses `base_url="http://localhost:9000"`; fake details | Proves `short_url` uses request base URL | T-03 |
+| M2 | header | As-built status moved to end of M2; §10.1 / §10.4 no longer design-only | M2 sync | T-04 |
+| M2 | §10.1 | Marked as built (script identical to design, no deviation); edge cases added: `exec` signal handling, `uv sync` installs dev group, `.env` overrides `PORT` / `LINKS_DB_PATH` given on the command line | Document real behaviour; `.env` precedence is a finding for the README / a possible later fix | T-04 |
+| M2 | §0.2, §10.4 | `.gitignore` documented as built (adds `.env`, `.results/`, `.venv/`, `node_modules/`, `*.db-wal`, `*.db-shm`, `.coverage.*`, `*.pyc`); `.env.example` comments recorded | Match the files | T-04 / setup |
+| M2 | §0.4 | Versions re-verified against `uv.lock` (no change needed, all 7 match); notable transitive versions listed; TASKS "stale pins" note marked obsolete | Owner asked for pins synced to `uv.lock` | D-05 |

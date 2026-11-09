@@ -25,7 +25,7 @@ Layers (routes → service → repository) are described in [docs/LLD.md](docs/L
 
 ## API
 
-Examples assume the server runs on `http://localhost:8000`.
+Examples assume the server runs on `http://localhost:8000`. Use `PORT=9000 ./start.sh` and change the port in the examples to match.
 
 ### Shorten a URL: `POST /links`
 
@@ -44,6 +44,13 @@ curl -X POST localhost:8000/links \
 `short_url` is built from the base URL of the incoming request, so with `PORT=9000` it starts with `http://localhost:9000/`.
 
 Only absolute `http` or `https` URLs with a host, at most 2048 characters and without whitespace, are accepted. A missing, non-string or invalid `url`, or malformed JSON, returns `422` (FastAPI's standard validation body) and nothing is stored. The URL is stored exactly as submitted.
+
+```bash
+curl -i -X POST localhost:8000/links \
+  -H 'content-type: application/json' \
+  -d '{"url": "ftp://files.example.com/a.zip"}'
+# the response is 422 (FastAPI validation error body); nothing is stored
+```
 
 ### Follow a short link: `GET /{code}`
 
@@ -76,7 +83,7 @@ curl localhost:8000/links/aZ3k9Q/stats
 ## Requirements
 
 - Python 3.12 or newer (`.python-version` is `3.12`).
-- [uv](https://docs.astral.sh/uv/) for dependency and environment management.
+- [uv](https://docs.astral.sh/uv/) for dependency and environment management. Install it by following the uv documentation; `start.sh` stops with a message if `uv` is not on `PATH`.
 - Linux or macOS. No external services, accounts or API keys are needed.
 
 ## Install
@@ -87,48 +94,47 @@ cd bench-link-shortener
 uv sync
 ```
 
-`uv sync` creates `.venv/` and installs the locked dependencies from `uv.lock`.
+`uv sync` creates `.venv/` and installs the locked dependencies from `uv.lock`, including the dev group (pytest, ruff, mypy). `./start.sh` runs `uv sync` too, so you do not need to run it first.
 
 ## Run
 
-Intended way (`start.sh` lands in milestone M2, task T-04; it is not in the repository yet):
-
 ```bash
 ./start.sh              # serves on http://0.0.0.0:8000
-PORT=9000 ./start.sh    # serves on port 9000
+PORT=9000 ./start.sh    # serves on http://0.0.0.0:9000
 ```
 
-`start.sh` runs `uv sync`, then starts uvicorn on `0.0.0.0:${PORT:-8000}`. It sources `.env` if the file exists.
+`start.sh` checks that `uv` is installed, runs `uv sync`, then starts the API with `uv run uvicorn link_shortener.main:create_app --factory --app-dir src --host 0.0.0.0 --port ${PORT:-8000}`. Stop the server with Ctrl+C. Links and click counts are kept in the SQLite file (see Configuration) and are still there after a restart.
 
-Until `start.sh` exists, run the app directly from the project root:
+If the port is already in use, uvicorn prints its own error and exits non-zero.
 
-```bash
-uv run uvicorn link_shortener.main:create_app --factory --app-dir src --host 0.0.0.0 --port 8000
-```
-
-`--app-dir src` is required because the package lives in `src/`. Change `--port` for another port. Stop the server with Ctrl+C.
+> **Known edge case: a `.env` file overrides `PORT` from the command line.**
+> `start.sh` loads `.env` after your shell environment, so a `PORT` (or `LINKS_DB_PATH`) set in `.env` wins over `PORT=9000 ./start.sh`. If a `.env` exists with `PORT=8000` (for example a plain copy of `.env.example`), `PORT=9000 ./start.sh` still serves on port 8000 and `short_url` uses port 8000.
+> To use another port, either edit `PORT` in `.env`, or do not create a `.env` at all and pass `PORT` on the command line.
 
 ## Configuration
 
-Settings are read from environment variables. Copy `.env.example` to `.env` to set them for `start.sh`.
+Settings are read from environment variables. To set them persistently for `start.sh`, copy `.env.example` to `.env` and edit it. Remember that values in `.env` override values you set in the shell (see Run).
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `LINKS_DB_PATH` | `links.db` (relative to the working directory, i.e. the project root when started as above) | SQLite file path. A blank value means the default. Parent directories are created on start. |
-| `PORT` | `8000` | Port used by `start.sh`. The app itself does not read it; with the direct command, pass `--port`. |
+| `LINKS_DB_PATH` | `links.db` (relative to the working directory; `start.sh` runs from the project root) | SQLite file path. A blank value means the default. Parent directories are created on start. |
+| `PORT` | `8000` | Port used by `start.sh`. The app itself does not read it; with the direct uvicorn command, pass `--port` instead. |
 
 `links.db` and other `*.db` files are git-ignored.
 
 ## Test and quality checks
 
 ```bash
-uv run pytest                                  # tests
-uv run pytest --cov=link_shortener             # tests with coverage
-uv run ruff check .                            # lint
-uv run ruff format --check .                   # format check
-uv run mypy --strict                           # type check
-scripts/check.sh                               # the full gate: lint, format, types, tests with coverage >= 85%
+uv run pytest                              # tests
+uv run pytest --cov                        # tests + coverage report (package link_shortener)
+uv run pytest --cov --cov-fail-under=85    # same, fails the run if coverage is below 85%
+uv run ruff check .                        # lint
+uv run ruff format --check .               # format check
+uv run mypy --strict                       # type check
+scripts/check.sh                           # the full gate: lint, format, types, tests with coverage >= 85%
 ```
+
+`--cov` only reports coverage; the 85% threshold is enforced by `--cov-fail-under=85`, which `scripts/check.sh` uses.
 
 To run the fast checks (lint, format, types) before each commit:
 
