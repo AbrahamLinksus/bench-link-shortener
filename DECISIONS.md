@@ -13,6 +13,7 @@
 | D-08 | 2026-11-09 | T-02 result | Approved | — | T-02 |
 | D-09 | 2026-11-09 | T-03 result | Approved | — | T-03 |
 | D-10 | 2026-11-09 | Milestone M1 (LLD sync + README) | Approved + continue in fresh session | continue here | M1-docs |
+| D-11 | 2026-11-09 | T-04 result card (start.sh) | Approve | — | T-04 |
 
 ## Tier 2 — decided by agents (overrule any time)
 | ID | Date | Decision | Chosen | Agent | Task |

@@ -63,11 +63,11 @@ data, and every SPEC §12 box can be ticked (README is written in the milestone-
 - Owner: backend-coder (tests: tester)
 - Depends on: T-03
 - Context: SPEC US-06, US-07, F-4, §12 · LLD §0.5, §9.1, §10.1, §10.4 · files: start.sh, .env.example, .gitignore
-- Status: Backlog
+- Status: Done
 - Acceptance criteria:
-  - [ ] `start.sh` matches LLD §10.1, is executable (`ls -l` shows `x`), and `./start.sh` serves on port 8000: a `curl` POST returns `201` with `short_url` starting `http://localhost:8000/` (captured to `.results/T-04/`).
-  - [ ] `PORT=9000 ./start.sh` serves on 9000 and `short_url` starts with `http://localhost:9000/`.
-  - [ ] Create a link, `curl` it twice, stop (Ctrl+C / kill), rerun `./start.sh`: stats show the same `url` and `clicks: 2`; `git status` shows `links.db` as ignored, not untracked.
-  - [ ] With `uv` absent from `PATH`, `./start.sh` exits non-zero and prints the message pointing to README.md.
-  - [ ] `scripts/check.sh` exits 0 with coverage ≥ 85%, and no server process is left running.
-- Result:
+  - [x] `start.sh` matches LLD §10.1, is executable (`ls -l` shows `x`), and `./start.sh` serves on port 8000: a `curl` POST returns `201` with `short_url` starting `http://localhost:8000/` (captured to `.results/T-04/`).
+  - [x] `PORT=9000 ./start.sh` serves on 9000 and `short_url` starts with `http://localhost:9000/`.
+  - [x] Create a link, `curl` it twice, stop (Ctrl+C / kill), rerun `./start.sh`: stats show the same `url` and `clicks: 2`; `git status` shows `links.db` as ignored, not untracked.
+  - [x] With `uv` absent from `PATH`, `./start.sh` exits non-zero and prints the message pointing to README.md.
+  - [x] `scripts/check.sh` exits 0 with coverage ≥ 85%, and no server process is left running.
+- Result: approved 2026-11-09 · main 92a72c0 · 99.18% cov, 111 tests · review 0C/0M/0 minor
