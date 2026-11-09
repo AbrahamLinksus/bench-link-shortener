@@ -45,14 +45,14 @@ instance on the same file, and the layer contracts are enforced by a test.
 - Owner: backend-coder (tests: tester)
 - Depends on: T-02
 - Context: SPEC US-01, US-02, US-03, US-04, US-05, US-06, §5 · LLD §6.1, §7.1, §8, §9, §11.1 (rows test_api_create, test_api_redirect, test_api_stats, test_persistence), §11.2 · files: src/link_shortener/{routes,main,service,schemas}.py, tests/conftest.py, tests/test_api_*.py, tests/test_persistence.py
-- Status: Backlog
+- Status: Done
 - Acceptance criteria:
-  - [ ] `POST /links` `{"url": "https://example.com/page"}` → `201` with a 6-char `[A-Za-z0-9]` code and `short_url` built from the request base URL (TestClient `base_url="http://localhost:9000"` → `http://localhost:9000/<code>`); `{}`, `not a url`, `ftp://…`, malformed JSON → `422` and nothing stored.
-  - [ ] `GET /{code}` → `307` with `Location` = original URL (`follow_redirects=False`) and clicks 0 → 1 → 2; unknown 6-char code, `/abc` and `/links` → `404 {"detail": "Link not found"}` with no click recorded.
-  - [ ] `GET /links/{code}/stats` → `200 {"url", "clicks", "created_at": "YYYY-MM-DDTHH:MM:SSZ"}` without changing clicks; unknown code → `404 {"detail": "Link not found"}`.
-  - [ ] `test_persistence.py`: app A creates a link and clicks it twice, then a new `create_app` on the same file reports `clicks: 2` and the redirect still works. Importing `link_shortener.main` creates no `links.db` (there is no module-level `app`).
-  - [ ] Every SPEC §5 row (except the `./start.sh` one) has at least one passing test; `scripts/check.sh` exits 0 with coverage ≥ 85%; a TestClient run of the §5 examples is captured to `.results/T-03/`.
-- Result:
+  - [x] `POST /links` `{"url": "https://example.com/page"}` → `201` with a 6-char `[A-Za-z0-9]` code and `short_url` built from the request base URL (TestClient `base_url="http://localhost:9000"` → `http://localhost:9000/<code>`); `{}`, `not a url`, `ftp://…`, malformed JSON → `422` and nothing stored.
+  - [x] `GET /{code}` → `307` with `Location` = original URL (`follow_redirects=False`) and clicks 0 → 1 → 2; unknown 6-char code, `/abc` and `/links` → `404 {"detail": "Link not found"}` with no click recorded.
+  - [x] `GET /links/{code}/stats` → `200 {"url", "clicks", "created_at": "YYYY-MM-DDTHH:MM:SSZ"}` without changing clicks; unknown code → `404 {"detail": "Link not found"}`.
+  - [x] `test_persistence.py`: app A creates a link and clicks it twice, then a new `create_app` on the same file reports `clicks: 2` and the redirect still works. Importing `link_shortener.main` creates no `links.db` (there is no module-level `app`).
+  - [x] Every SPEC §5 row (except the `./start.sh` one) has at least one passing test; `scripts/check.sh` exits 0 with coverage ≥ 85%; a TestClient run of the §5 examples is captured to `.results/T-03/`.
+- Result: approved 2026-11-09 · main add20ec · 99% cov, 111 tests · review 0C/0M/5 minor
 
 ## M2 · Run and ship
 Outcome: the owner starts the service with `./start.sh` on 8000 or `$PORT`, a restart keeps

@@ -11,6 +11,7 @@
 | D-06 | 2026-11-09 | LLD + conventions + packages | Approved | — | plan |
 | D-07 | 2026-11-09 | T-01 result | Approved | — | T-01 |
 | D-08 | 2026-11-09 | T-02 result | Approved | — | T-02 |
+| D-09 | 2026-11-09 | T-03 result | Approved | — | T-03 |
 
 ## Tier 2 — decided by agents (overrule any time)
 | ID | Date | Decision | Chosen | Agent | Task |

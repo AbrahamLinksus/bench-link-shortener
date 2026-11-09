@@ -7,8 +7,8 @@
 | Problem | Link shortener API (FastAPI + SQLite): shorten, redirect with click count, stats |
 | Repo | AbrahamLinksus/bench-link-shortener (public) |
 | Stage | 7 Build |
-| Milestone | M1 · Working API (2/3 tasks) |
-| Next step | T-03 · backend-coder · routes + app factory |
+| Milestone | M1 · Working API (3/3 tasks) |
+| Next step | M1-docs · architect as-built LLD sync, then docs README |
 | Last updated | 2026-11-09 |
 
 ## Team
@@ -38,6 +38,7 @@ Context gaps agents reported (`Context gap:` in a REPORT). The Orchestrator adds
 `Read:` field for that role on top of the per-role defaults in brief-template.md.
 | Role | Also read | Why (from gap report) |
 |---|---|---|
+| reviewer | docs/SPEC.md §5 (API tasks) | T-03 review could not check §5 coverage without it |
 
 ## Notes for the next session
 - Owner: Jake · Approval mode: batch-low-risk · Cost mode: balanced
