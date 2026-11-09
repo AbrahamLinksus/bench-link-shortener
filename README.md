@@ -107,13 +107,11 @@ PORT=9000 ./start.sh    # serves on http://0.0.0.0:9000
 
 If the port is already in use, uvicorn prints its own error and exits non-zero.
 
-> **Known edge case: a `.env` file overrides `PORT` from the command line.**
-> `start.sh` loads `.env` after your shell environment, so a `PORT` (or `LINKS_DB_PATH`) set in `.env` wins over `PORT=9000 ./start.sh`. If a `.env` exists with `PORT=8000` (for example a plain copy of `.env.example`), `PORT=9000 ./start.sh` still serves on port 8000 and `short_url` uses port 8000.
-> To use another port, either edit `PORT` in `.env`, or do not create a `.env` at all and pass `PORT` on the command line.
+Precedence for every setting: command line (`PORT=9000 ./start.sh`) → `.env` → default.
 
 ## Configuration
 
-Settings are read from environment variables. To set them persistently for `start.sh`, copy `.env.example` to `.env` and edit it. Remember that values in `.env` override values you set in the shell (see Run).
+Settings are read from environment variables. To set them persistently for `start.sh`, copy `.env.example` to `.env` and edit it. Values set in the shell take precedence over `.env` (see Run).
 
 | Variable | Default | Meaning |
 |---|---|---|
