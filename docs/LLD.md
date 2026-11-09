@@ -9,13 +9,14 @@
 > Source: approved `docs/SPEC.md` and `docs/HLD.md`. Stack fixed by the owner (`docs/owner-spec.md`).
 > Story IDs (US-xx) and flow IDs (F-x) refer to SPEC.
 >
-> **As-built status:** synced to the code at the end of M2 (T-01 … T-04, main 92a72c0).
-> §10.1 / §10.4 (`start.sh`, `.env.example`, `.gitignore`) are as built (T-04). §10.5 (README)
-> is written by the M2 docs step and is not part of this sync.
+> **As-built status:** synced to the code at handover (T-01 … T-04, T-04b; main ad2e64a, plus
+> the handover CI workflow, §10.7). §10.5 (README) is written by the docs agent and is not part
+> of this sync.
 >
-> **CR-1 (D-13, design only, not built yet):** §10.1 `start.sh` now specifies "shell wins over
-> `.env`"; §11.1 adds `tests/test_start_script.py`; §0.2, §0.5, §10.5 follow. Everything else
-> is unchanged and still as built at M2.
+> **CR-1 (D-13, D-14) is built (T-04b, approved D-15):** §10.1 `start.sh` ("shell wins over
+> `.env`") and §11.5 `tests/test_start_script.py` are as built, identical to the design. The
+> four review minors the owner accepted (D-15) are recorded as known limitations in §10.1 and
+> §11.5 and in `docs/ARCHITECTURE.md` §8.
 
 ## §0 Overview
 
@@ -43,6 +44,9 @@
 ├── .env.example              # LINKS_DB_PATH, PORT (§0.5)
 ├── .gitignore                # .env, .venv/, *.db (+ journal/WAL/SHM), coverage, caches (§10.4)
 ├── start.sh                  # §10.1 (executable)
+├── .github/
+│   └── workflows/
+│       └── ci.yml            # §10.7 CI: scripts/check.sh on push / PR (added at handover)
 ├── scripts/
 │   ├── check.sh              # §10.2 (executable) quality gate
 │   └── git-hooks/
@@ -549,13 +553,14 @@ sequenceDiagram
 
 ## §10 Run, tooling and project files
 - **Responsibility:** one-command start, the quality gate, and tool configuration.
-- **Path(s):** `start.sh`, `scripts/check.sh`, `scripts/git-hooks/pre-commit`, `pyproject.toml`, `.python-version`, `.env.example`, `.gitignore`, `README.md`
+- **Path(s):** `start.sh`, `scripts/check.sh`, `scripts/git-hooks/pre-commit`, `.github/workflows/ci.yml`, `pyproject.toml`, `.python-version`, `.env.example`, `.gitignore`, `README.md`
 - **Depends on:** §9 (`create_app` factory path).
 
-### §10.1 `start.sh` (executable, `chmod +x`) — design updated by CR-1 (D-13: "shell wins")
+### §10.1 `start.sh` (executable, `chmod +x`) — as built (T-04b, CR-1 / D-13: "shell wins")
 The T-04 version sourced `.env` after the caller's environment, so `.env` overrode
-`PORT=9000 ./start.sh` (contrary to SPEC US-07 / F-4). The new script keeps every variable the
-caller exported and lets `.env` fill only the ones that are missing:
+`PORT=9000 ./start.sh` (contrary to SPEC US-07 / F-4). The T-04b script (below, identical to
+the file) keeps every variable the caller exported and lets `.env` fill only the ones that are
+missing:
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -600,8 +605,15 @@ Why this shape (design notes for the coder):
 - **Values are stored in an array, never re-`eval`ed**, so values with spaces, quotes, `$` or
   newlines come back byte-for-byte. (`eval "$(export -p)"` was rejected: it fails under `set -e`
   if the caller exported a readonly bash variable such as `SHELLOPTS`.)
-- **Only changed values are restored** (`!=` check). A readonly variable can never differ (sourcing
-  would already have failed), so the `export` never hits one.
+- **Only changed values are restored** (`!=` check). For an ordinary readonly variable the
+  `export` never runs: a `.env` assignment to it fails and stops the script under `set -e`
+  before the restore loop, so its value cannot differ. This does **not** hold for `SHELLOPTS`
+  and `BASHOPTS`: they are readonly but bash rewrites them itself when `set -o` / `set +o` /
+  `shopt` run. If the caller exported one of them and `.env` runs such a command, the value
+  differs, the restore `export` hits a readonly variable, fails, and the script stops under
+  `set -e`. (`set -a` / `set +a` around the `source` cancel out, so they leave `SHELLOPTS`
+  unchanged.) `.env` is documented as plain `KEY=value` lines (§10.4), so this is out of scope;
+  accepted as a known limitation (D-15).
 - **`set -euo pipefail` safe:** every indirect read uses `${!name-}` (no unbound error under `-u`);
   the comparison is inside `if`, so a false test never trips `-e`; there are no pipelines.
 - **Bash 3.2 compatible** (macOS `/bin/bash`, README Requirements): no associative arrays,
@@ -629,6 +641,14 @@ Edge cases:
   `KEY=value` lines (§10.4), so this is out of scope.
 - `.env` is still sourced as shell code: a syntax error or a failing command in it stops the
   script under `set -e`, as before.
+- **"Set" means exported.** `compgen -e` sees only exported variables. `PORT=9000 ./start.sh`
+  and `export PORT=9000` both export; a plain `PORT=9000` on its own line followed by
+  `./start.sh` is not visible to the script at all, so `.env` (or the default) applies. The
+  README says "set in the shell"; the precise word is "exported" (known limitation, D-15).
+- **Bash without `compgen`** (built with `--disable-progcomp`): `$(compgen -e)` fails inside the
+  `for` word list, which does not trip `set -e`, so the snapshot is empty and `.env` wins again
+  (the M2 behaviour) without the script stopping. Stock bash on Linux and macOS has `compgen`;
+  accepted as a known limitation (D-15).
 
 ### §10.2 `scripts/check.sh` (executable) — the quality gate
 ```bash
@@ -726,6 +746,17 @@ uv run mypy --strict
 ```
 It runs the fast half of §10.2 only; tests and coverage stay in `scripts/check.sh`.
 
+### §10.7 CI workflow (new at handover, added by devops)
+`.github/workflows/ci.yml` — GitHub Actions workflow `CI`, one job `check` on `ubuntu-latest`
+(timeout 15 min), triggered on every `push` and `pull_request`; `permissions: contents: read`;
+a `concurrency` group per workflow + ref with `cancel-in-progress: true`. Steps:
+1. `actions/checkout@v7.0.1`
+2. `astral-sh/setup-uv@v10.3.3` (Python comes from `.python-version`, which uv reads itself; an earlier `python-version-file` input was invalid and is being removed), cache keyed on `uv.lock`
+3. `uv sync --locked` (fails if `uv.lock` is out of date with `pyproject.toml`)
+4. `scripts/check.sh` (the full §10.2 gate; `tests/test_start_script.py` uses the runner's bash)
+
+No secrets, no deployment (SPEC §11 keeps deployment out of scope); it only runs the gate.
+
 ## §11 Tests
 - **Responsibility:** prove every SPEC §5 row, the layer contracts and the quality bar.
 - **Path(s):** `tests/`
@@ -795,7 +826,7 @@ top-level package/module is imported. As built there are three tests:
   (`test_collision_retries`) rather than the `test_<unit>_<condition>_<expected>` form in
   CONVENTIONS §5. Cosmetic; candidate for a Tier 2 rename in a later task.
 
-### §11.5 `start.sh` environment-precedence test (new, CR-1)
+### §11.5 `start.sh` environment-precedence test (as built, T-04b, CR-1)
 `tests/test_start_script.py` — proves the §10.1 precedence rule in well under a second, with no
 server, no port, no network and no real `uv`.
 
@@ -832,6 +863,10 @@ Notes:
 - Not flaky: no sockets, no sleeps, deterministic output; `timeout=10` only guards a hang.
 - Does not touch coverage of `link_shortener` (shell code); it adds no package and stays inside
   `tests/**`. Uses `subprocess` in a test, not in production code, so §0.3 contracts are unaffected.
+- As built: all four tests in the table exist (the optional one included), with the fixture
+  `sandbox`, helper `run_start` and stub `STUB_UV` exactly as specified.
+- Not covered (known limitation, D-15): the set-but-empty rule from §10.1 (`PORT= ./start.sh`
+  → port 8000 even when `.env` has another `PORT`) has no test.
 
 ## Changes since last milestone
 | Milestone | Section | Change | Why | Ref |
@@ -857,3 +892,7 @@ Notes:
 | CR-1 | §10.1 | New `start.sh`: snapshot exported vars (`compgen -e`), source `.env`, restore any value `.env` changed → shell wins for every variable; ".env wins" edge case replaced by the precedence rule (shell → `.env` → default) and set-but-empty rule | `.env` overrode `PORT=9000 ./start.sh`, contrary to SPEC US-07 / F-4 | D-13, CR-1 |
 | CR-1 | §11.1, §11.5 (new), §0.2 | New `tests/test_start_script.py`: temp copy of `start.sh` + stub `uv` on `PATH` that prints args and env; 3 tests (+1 optional) | Cheap, non-flaky regression test for the precedence rule | D-13, CR-1 |
 | CR-1 | §0.5, §10.5, header | Precedence stated in config section; README design drops the "Known edge case" block and the "`.env` overrides the shell" sentence | Follow §10.1 | D-13, CR-1 |
+| Handover | header, §10.1, §11.5 | CR-1 marked as built: `start.sh` and `tests/test_start_script.py` match the design with no deviation (all 4 tests incl. the optional one) | T-04b merged (main ad2e64a) | D-14, D-15, T-04b |
+| Handover | §10.1 | Design note corrected: "a readonly variable can never differ" is false for `SHELLOPTS` / `BASHOPTS` when `.env` runs `set -o` / `shopt`; edge cases added for "set" = exported and for bash without `compgen` (falls back to `.env` wins) | Reviewer findings on T-04b, accepted as known limitations | D-15 |
+| Handover | §11.5 | Gap recorded: no test for set-but-empty `PORT` | Reviewer finding, accepted | D-15 |
+| Handover | §0.2, §10.7 (new) | CI workflow `.github/workflows/ci.yml` runs `uv sync --locked` + `scripts/check.sh` on push / PR | Handover CI step (devops) | handover |
