@@ -7,8 +7,8 @@
 | Problem | Link shortener API (FastAPI + SQLite): shorten, redirect with click count, stats |
 | Repo | AbrahamLinksus/bench-link-shortener (public) |
 | Stage | 7 Build |
-| Milestone | M1 · Working API (3/3 tasks) |
-| Next step | M1-docs · architect as-built LLD sync, then docs README |
+| Milestone | M2 · Run and ship (0/1 tasks) — M1 done |
+| Next step | T-04 · backend-coder · start.sh + restart check (then M2-docs, then handover) |
 | Last updated | 2026-11-09 |
 
 ## Team
@@ -42,4 +42,7 @@ Context gaps agents reported (`Context gap:` in a REPORT). The Orchestrator adds
 
 ## Notes for the next session
 - Owner: Jake · Approval mode: batch-low-risk · Cost mode: balanced
+- M1 approved 2026-11-09 (main dcff4e1). Resume with `/setup-project resume bench-link-shortener`.
+- README marks start.sh as pending: T-04 (or M2-docs) must update README when start.sh lands.
+- Capture needs: `uv run --with playwright --with markdown python $CAPTURE ...` (playwright not in system python).
 - Owner-provided requirements: docs/owner-spec.md (treat as full requirements) 
