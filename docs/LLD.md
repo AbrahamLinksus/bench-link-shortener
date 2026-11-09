@@ -12,6 +12,10 @@
 > **As-built status:** synced to the code at the end of M2 (T-01 … T-04, main 92a72c0).
 > §10.1 / §10.4 (`start.sh`, `.env.example`, `.gitignore`) are as built (T-04). §10.5 (README)
 > is written by the M2 docs step and is not part of this sync.
+>
+> **CR-1 (D-13, design only, not built yet):** §10.1 `start.sh` now specifies "shell wins over
+> `.env`"; §11.1 adds `tests/test_start_script.py`; §0.2, §0.5, §10.5 follow. Everything else
+> is unchanged and still as built at M2.
 
 ## §0 Overview
 
@@ -72,6 +76,7 @@
     ├── test_api_stats.py     # GET /links/{code}/stats
     ├── test_api_edge.py      # cross-endpoint edge cases (uniqueness, case, no-click on 404)
     ├── test_persistence.py   # US-06 via two app instances
+    ├── test_start_script.py  # §10.1 env precedence (stub uv, no server) — CR-1
     └── test_architecture.py  # §0.3 layer contracts
 ```
 This layout matches the plugin default scopes (`src/**`, `scripts/**`, `tests/**`), so no
@@ -148,8 +153,11 @@ starlette 1.10.0, anyio 4.16.0, h11 0.16.0, httpcore 1.0.9, coverage 7.17.2 (via
 | `LINKS_DB_PATH` | `links.db` (relative to the working dir; `start.sh` `cd`s to the project root) | §1 `Settings.from_env` | SQLite file path. Empty string = default. Parent dirs are created by §4. |
 | `PORT` | `8000` | §10.1 `start.sh` only | uvicorn port. The app never reads it; `short_url` comes from the request (§8). |
 
-- No secrets exist. `.env.example` lists both vars with their defaults. `start.sh` sources `.env`
-  if present (git-ignored already). Tests never read `.env`; they build `Settings` directly.
+- No secrets exist. `.env.example` lists both vars with their defaults. `start.sh` loads `.env`
+  if present (git-ignored already) **only for variables the caller has not set**: a value from
+  the shell / command line always wins over `.env` (§10.1, CR-1). Precedence, highest first:
+  caller's environment → `.env` → the default in this table. Tests never read the project's
+  `.env`; they build `Settings` directly (the §11.1 start-script test uses its own temp `.env`).
 
 ## §1 Config
 - **Responsibility:** turn environment variables into one immutable, typed `Settings` object.
@@ -544,7 +552,10 @@ sequenceDiagram
 - **Path(s):** `start.sh`, `scripts/check.sh`, `scripts/git-hooks/pre-commit`, `pyproject.toml`, `.python-version`, `.env.example`, `.gitignore`, `README.md`
 - **Depends on:** §9 (`create_app` factory path).
 
-### §10.1 `start.sh` (executable, `chmod +x`) — as built (T-04), identical to the design
+### §10.1 `start.sh` (executable, `chmod +x`) — design updated by CR-1 (D-13: "shell wins")
+The T-04 version sourced `.env` after the caller's environment, so `.env` overrode
+`PORT=9000 ./start.sh` (contrary to SPEC US-07 / F-4). The new script keeps every variable the
+caller exported and lets `.env` fill only the ones that are missing:
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -553,23 +564,71 @@ if ! command -v uv >/dev/null 2>&1; then
   echo "error: 'uv' is not installed. See README.md (Install) for instructions." >&2
   exit 1
 fi
-if [[ -f .env ]]; then set -a; . ./.env; set +a; fi
+# Shell wins over .env (LLD §10.1): snapshot every exported variable, load .env,
+# then put back any value that .env changed. .env therefore only fills unset variables.
+if [[ -f .env ]]; then
+  _dotenv_saved=()
+  for _dotenv_name in $(compgen -e); do
+    _dotenv_saved+=("$_dotenv_name" "${!_dotenv_name-}")
+  done
+  set -a
+  . ./.env
+  set +a
+  for ((_dotenv_i = 0; _dotenv_i < ${#_dotenv_saved[@]}; _dotenv_i += 2)); do
+    _dotenv_name="${_dotenv_saved[_dotenv_i]}"
+    if [[ "${!_dotenv_name-}" != "${_dotenv_saved[_dotenv_i + 1]}" ]]; then
+      export "$_dotenv_name=${_dotenv_saved[_dotenv_i + 1]}"
+    fi
+  done
+  unset _dotenv_saved _dotenv_name _dotenv_i
+fi
 uv sync
 exec uv run uvicorn link_shortener.main:create_app --factory --app-dir src \
   --host 0.0.0.0 --port "${PORT:-8000}"
 ```
 Port in use → uvicorn's own error and non-zero exit (SPEC F-4).
 
-Edge cases (as built):
-- `uv` missing from `PATH` → the message above on stderr, exit 1 (verified in T-04).
+**Precedence rule (replaces the M2 ".env wins" edge case):** for every variable, highest first:
+1. the caller's environment (`PORT=9000 ./start.sh`, or `export PORT=9000` earlier);
+2. `.env` in the project root, if the file exists;
+3. the default (`${PORT:-8000}` here; `LINKS_DB_PATH` → `links.db` in §1).
+
+Why this shape (design notes for the coder):
+- **Generic, not per-variable.** `compgen -e` lists the name of every exported variable, so the
+  rule covers `PORT`, `LINKS_DB_PATH` and any variable added to `.env` later, with no list to
+  maintain and no parsing of `.env` (it is still `source`d, so its syntax is unchanged).
+- **Values are stored in an array, never re-`eval`ed**, so values with spaces, quotes, `$` or
+  newlines come back byte-for-byte. (`eval "$(export -p)"` was rejected: it fails under `set -e`
+  if the caller exported a readonly bash variable such as `SHELLOPTS`.)
+- **Only changed values are restored** (`!=` check). A readonly variable can never differ (sourcing
+  would already have failed), so the `export` never hits one.
+- **`set -euo pipefail` safe:** every indirect read uses `${!name-}` (no unbound error under `-u`);
+  the comparison is inside `if`, so a false test never trips `-e`; there are no pipelines.
+- **Bash 3.2 compatible** (macOS `/bin/bash`, README Requirements): no associative arrays,
+  `mapfile` or `[[ -v ]]`; indexed arrays, `+=`, `${!name-}` and `for ((…))` all exist in 3.2.
+- Helper names are prefixed `_dotenv_` so a `.env` key is very unlikely to clash with them, and
+  they are `unset` afterwards so `uv` / uvicorn never see them (they are not exported anyway).
+- Code is at top level, not in a function: assignments in `.env` must stay global (inside a
+  function a `.env` line could hit a `local`).
+
+Edge cases:
+- `uv` missing from `PATH` → the message above on stderr, exit 1 (verified in T-04; the check
+  stays before `.env` is read, unchanged).
 - `exec` replaces the shell with `uv run`, so Ctrl+C / `kill` reaches uvicorn directly and no
   wrapper shell is left behind.
 - `uv sync` installs the default `dev` group too (§0.4), so a fresh clone can also run §10.2.
-- **`.env` wins over the caller's environment.** `.env` is sourced *after* the process starts,
-  so a `.env` containing `PORT=8000` (e.g. a straight copy of `.env.example`) overrides
-  `PORT=9000 ./start.sh`; the same applies to `LINKS_DB_PATH`. Without a `.env` (the fresh-clone
-  case in SPEC F-4 / US-07) the command-line value is used. Not changed at M2; the README
-  should say so (see Changes table).
+- **Shell wins over `.env`.** `PORT=9000 ./start.sh` serves on 9000 even when `.env` has
+  `PORT=8000` (e.g. a straight copy of `.env.example`); the same holds for `LINKS_DB_PATH` and
+  every other variable. A variable only in `.env` is still exported to the app. No `.env` →
+  caller's value or the default, as before.
+- **Set-but-empty counts as set** (`PORT= ./start.sh`): the empty shell value wins over `.env`,
+  then `${PORT:-8000}` turns it into 8000 and §1 turns an empty `LINKS_DB_PATH` into `links.db`.
+  This is the standard shell meaning of "set"; to use the `.env` value, don't pass the variable.
+- A `.env` line that `unset`s a variable the caller exported, and that variable's original value
+  was empty, is not restored (`${!name-}` reads both as empty). `.env` is documented as plain
+  `KEY=value` lines (§10.4), so this is out of scope.
+- `.env` is still sourced as shell code: a syntax error or a failing command in it stops the
+  script under `set -e`, as before.
 
 ### §10.2 `scripts/check.sh` (executable) — the quality gate
 ```bash
@@ -652,7 +711,7 @@ dev = ["httpx>=0.28.1", "mypy>=2.4.1", "pytest>=9.2.0", "pytest-cov>=7.1.0", "ru
   and `*.pyc`. `links.db` shows as ignored in `git status` (T-04).
 
 ### §10.5 README.md (docs agent)
-Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), Run (`./start.sh`, `PORT=9000 ./start.sh`, `LINKS_DB_PATH`), API (three endpoints with the SPEC §5 curl examples), Test (`uv run pytest --cov=link_shortener`), Lint/format (`uv run ruff check .`, `uv run ruff format --check .`), Types (`uv run mypy --strict`), Full gate (`scripts/check.sh`), Pre-commit hook (`git config core.hooksPath scripts/git-hooks`, §10.6), Layout (routes → service → repository).
+Sections: Requirements (Python 3.12+, uv + install link), Install (`uv sync`), Run (`./start.sh`, `PORT=9000 ./start.sh`, `LINKS_DB_PATH`; precedence one line: shell / command line → `.env` → default, per §10.1 — CR-1 removes the "Known edge case: a `.env` file overrides `PORT`" block and the "values in `.env` override values you set in the shell" sentence in Configuration), API (three endpoints with the SPEC §5 curl examples), Test (`uv run pytest --cov=link_shortener`), Lint/format (`uv run ruff check .`, `uv run ruff format --check .`), Types (`uv run mypy --strict`), Full gate (`scripts/check.sh`), Pre-commit hook (`git config core.hooksPath scripts/git-hooks`, §10.6), Layout (routes → service → repository).
 
 ### §10.6 Pre-commit hook (new at M1, added by env-setup)
 `scripts/git-hooks/pre-commit` — a plain bash script (no `pre-commit` package), enabled per
@@ -688,6 +747,7 @@ It runs the fast half of §10.2 only; tests and coverage stay in `scripts/check.
 | `test_api_edge.py` | 300 POSTs → 300 distinct codes; 7-char path → `404`; wrong-case code → `404` on stats and redirect with no click; `/zzzzzz`, `/abc`, `/links` leave an existing link's clicks at 0 (checked in SQLite); `{"url": 5}` and a JSON array body → `422` |
 | `test_persistence.py` | US-06: app A creates + 2 clicks on a tmp file; new `create_app` on the same file → stats `clicks: 2`, redirect still works; importing `link_shortener.main` creates no `links.db` |
 | `test_architecture.py` | §0.3 contracts (§11.3) |
+| `test_start_script.py` | CR-1: §10.1 env precedence — shell value wins over `.env`, `.env` fills unset variables, no `.env` → default port. Runs a temp copy of `start.sh` with a stub `uv`; no real server, no network (§11.5) |
 
 Beyond the design, as built the tests also cover: `Settings` immutability and stripping
 (`test_config`), `Link` immutability and error payloads (`test_domain`), autocommit,
@@ -735,6 +795,44 @@ top-level package/module is imported. As built there are three tests:
   (`test_collision_retries`) rather than the `test_<unit>_<condition>_<expected>` form in
   CONVENTIONS §5. Cosmetic; candidate for a Tier 2 rename in a later task.
 
+### §11.5 `start.sh` environment-precedence test (new, CR-1)
+`tests/test_start_script.py` — proves the §10.1 precedence rule in well under a second, with no
+server, no port, no network and no real `uv`.
+
+Setup (a fixture, e.g. `sandbox(tmp_path) -> Path`):
+1. Copy the real script: `shutil.copy(PROJECT_ROOT / "start.sh", tmp_path / "start.sh")`, with
+   `PROJECT_ROOT = Path(__file__).resolve().parents[1]`. The copy `cd`s to `tmp_path`, so it reads
+   `tmp_path/.env` and never the developer's real `.env`.
+2. Write a stub `tmp_path / "bin" / "uv"` (mode `0o755`):
+   ```sh
+   #!/bin/sh
+   if [ "$1" = "sync" ]; then exit 0; fi
+   printf 'ARGS=%s\n' "$*"
+   env
+   ```
+   `uv sync` becomes a no-op; `exec uv run uvicorn …` prints its arguments and the environment
+   it received, then exits 0.
+3. A helper `run_start(sandbox, dotenv: str | None, env: dict[str, str]) -> tuple[str, dict[str, str]]`
+   writes `.env` when `dotenv` is not `None`, then runs
+   `subprocess.run(["bash", str(sandbox / "start.sh")], env={"PATH": f"{sandbox / 'bin'}{os.pathsep}{os.environ['PATH']}", "HOME": str(sandbox), **env}, capture_output=True, text=True, timeout=10, check=True)`
+   and returns the `ARGS=` line and the `KEY=value` lines as a dict. The child env is built
+   explicitly (not inherited), so a `PORT` in the developer's shell cannot leak in.
+   (Stub `uv` comes first on `PATH`; `bash`, `dirname`, `env` come from the rest of `PATH`.)
+
+Tests (one behaviour each, CONVENTIONS §5 naming):
+| Test | `.env` | Caller env | Assert |
+|---|---|---|---|
+| `test_start_script_shell_env_set_overrides_dotenv` | `PORT=8000`, `LINKS_DB_PATH=dotenv.db`, `CR1_EXTRA=dotenv` | `PORT=9000`, `LINKS_DB_PATH="shell dir/$x'y.db"`, `CR1_EXTRA=shell` | ARGS ends with `--port 9000`; child `LINKS_DB_PATH` equals the shell value byte-for-byte (spaces / `$` / quote survive); `CR1_EXTRA=shell` (proves the rule is generic) |
+| `test_start_script_shell_env_unset_uses_dotenv` | `PORT=8123`, `LINKS_DB_PATH=dotenv.db`, `CR1_DOTENV_ONLY=yes` | neither set | `--port 8123`; `LINKS_DB_PATH=dotenv.db`; `CR1_DOTENV_ONLY=yes` exported to the child |
+| `test_start_script_without_dotenv_uses_default_port` | no file | neither set | `--port 8000`; `LINKS_DB_PATH` absent from the child env (§1 default applies in the app) |
+| `test_start_script_helper_variables_not_leaked` (optional) | any | any | no `_dotenv_` key in the child env |
+
+Notes:
+- Skip the module when bash is missing: `pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")`.
+- Not flaky: no sockets, no sleeps, deterministic output; `timeout=10` only guards a hang.
+- Does not touch coverage of `link_shortener` (shell code); it adds no package and stays inside
+  `tests/**`. Uses `subprocess` in a test, not in production code, so §0.3 contracts are unaffected.
+
 ## Changes since last milestone
 | Milestone | Section | Change | Why | Ref |
 |---|---|---|---|---|
@@ -756,3 +854,6 @@ top-level package/module is imported. As built there are three tests:
 | M2 | §10.1 | Marked as built (script identical to design, no deviation); edge cases added: `exec` signal handling, `uv sync` installs dev group, `.env` overrides `PORT` / `LINKS_DB_PATH` given on the command line | Document real behaviour; `.env` precedence is a finding for the README / a possible later fix | T-04 |
 | M2 | §0.2, §10.4 | `.gitignore` documented as built (adds `.env`, `.results/`, `.venv/`, `node_modules/`, `*.db-wal`, `*.db-shm`, `.coverage.*`, `*.pyc`); `.env.example` comments recorded | Match the files | T-04 / setup |
 | M2 | §0.4 | Versions re-verified against `uv.lock` (no change needed, all 7 match); notable transitive versions listed; TASKS "stale pins" note marked obsolete | Owner asked for pins synced to `uv.lock` | D-05 |
+| CR-1 | §10.1 | New `start.sh`: snapshot exported vars (`compgen -e`), source `.env`, restore any value `.env` changed → shell wins for every variable; ".env wins" edge case replaced by the precedence rule (shell → `.env` → default) and set-but-empty rule | `.env` overrode `PORT=9000 ./start.sh`, contrary to SPEC US-07 / F-4 | D-13, CR-1 |
+| CR-1 | §11.1, §11.5 (new), §0.2 | New `tests/test_start_script.py`: temp copy of `start.sh` + stub `uv` on `PATH` that prints args and env; 3 tests (+1 optional) | Cheap, non-flaky regression test for the precedence rule | D-13, CR-1 |
+| CR-1 | §0.5, §10.5, header | Precedence stated in config section; README design drops the "Known edge case" block and the "`.env` overrides the shell" sentence | Follow §10.1 | D-13, CR-1 |
