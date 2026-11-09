@@ -2,3 +2,16 @@
 .results/
 .venv/
 node_modules/
+links.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.pyc

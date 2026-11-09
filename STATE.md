@@ -6,14 +6,19 @@
 |---|---|
 | Problem | Link shortener API (FastAPI + SQLite): shorten, redirect with click count, stats |
 | Repo | AbrahamLinksus/bench-link-shortener (public) |
-| Stage | 1 Spec |
-| Milestone | — |
-| Next step | Spec interview (planner) |
+| Stage | 7 Build |
+| Milestone | M1 · Working API (0/3 tasks) |
+| Next step | T-01 · backend-coder · core modules + repository |
 | Last updated | 2026-11-09 |
 
 ## Team
 | Agent | Model | Why on this project |
 |---|---|---|
+| backend-coder | Sonnet | API + SQLite code |
+| tester | Sonnet | endpoint tests, coverage |
+| reviewer | Opus (Sonnet for low-risk) | read-only review |
+| debugger | Opus (Sonnet for low-risk) | failures |
+| docs | Haiku | README |
 
 ## Open work
 - Tasks in progress live on `wip/*` branches (see `taskgit.sh list`); their step states are in each branch's TASK_PROGRESS.md.

@@ -1,0 +1,37 @@
+sequenceDiagram
+    autonumber
+    actor V as Visitor
+    participant R as routes.follow_link (section 8)
+    participant P as main._service_scope (section 9)
+    participant S as LinkService.resolve_and_count (section 6)
+    participant Repo as SqliteLinkRepository (section 5)
+    participant DB as SQLite links table (section 4)
+
+    V->>R: GET /{code}
+    R->>P: get_link_service: provider() enter
+    P->>DB: connect(db_path) (autocommit, check_same_thread=False)
+    P-->>R: LinkService(repo, RandomCodeGenerator, utc_now)
+    R->>S: resolve_and_count(code)
+    alt code is not 6 chars of [A-Za-z0-9]
+        S-->>R: raise LinkNotFoundError (no DB call)
+        R-->>V: 404 {"detail": "Link not found"}
+    else valid format
+        S->>Repo: increment_clicks(code)
+        Repo->>DB: UPDATE links SET clicks = clicks + 1 WHERE code = ?
+        DB-->>Repo: rowcount
+        alt rowcount == 0
+            Repo-->>S: False
+            S-->>R: raise LinkNotFoundError
+            R-->>V: 404 {"detail": "Link not found"} (no click recorded)
+        else rowcount == 1
+            Repo-->>S: True
+            S->>Repo: get_by_code(code)
+            Repo->>DB: SELECT code, url, clicks, created_at FROM links WHERE code = ?
+            DB-->>Repo: row
+            Repo-->>S: Link
+            S-->>R: link.url
+            R-->>V: 307 Location: link.url
+        end
+    end
+    R->>P: dependency exit
+    P->>DB: connection.close()

@@ -1,0 +1,7 @@
+erDiagram
+    LINKS {
+        TEXT code PK "6 chars [A-Za-z0-9], BINARY collation = case-sensitive"
+        TEXT url "as submitted, max 2048 chars"
+        INTEGER clicks "NOT NULL DEFAULT 0, CHECK >= 0"
+        TEXT created_at "UTC YYYY-MM-DDTHH:MM:SSZ"
+    }

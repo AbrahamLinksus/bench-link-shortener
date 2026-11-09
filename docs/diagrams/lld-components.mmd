@@ -1,0 +1,44 @@
+flowchart TB
+    UV["uvicorn --factory<br/>start.sh (section 10.1)"] --> MAIN
+
+    subgraph ROOT["Composition root"]
+        MAIN["main.py (section 9)<br/>create_app(), _service_scope()"]
+    end
+
+    subgraph HTTP["HTTP layer"]
+        ROUTES["routes.py (section 8)<br/>POST /links, GET /links/{code}/stats, GET /{code}<br/>get_link_service"]
+        SCHEMAS["schemas.py (section 7)<br/>CreateLinkRequest, CreateLinkResponse, LinkStats"]
+    end
+
+    subgraph LOGIC["Service layer"]
+        SERVICE["service.py (section 6)<br/>LinkService"]
+    end
+
+    subgraph CORE["Domain (no I/O)"]
+        DOMAIN["domain.py (section 2)<br/>Link, errors, is_valid_code, utc_now<br/>Protocols: LinkRepository, CodeGenerator"]
+    end
+
+    subgraph IO["Adapters / I/O"]
+        REPO["repository.py (section 5)<br/>SqliteLinkRepository"]
+        CODES["codes.py (section 3)<br/>RandomCodeGenerator"]
+        DB["db.py (section 4)<br/>connect(), init_schema()"]
+        CONFIG["config.py (section 1)<br/>Settings.from_env()"]
+    end
+
+    SQLITE[("SQLite file<br/>LINKS_DB_PATH, table links")]
+
+    MAIN --> CONFIG
+    MAIN --> DB
+    MAIN --> REPO
+    MAIN --> CODES
+    MAIN --> SERVICE
+    MAIN -->|"include_router + app.state provider"| ROUTES
+
+    ROUTES --> SCHEMAS
+    ROUTES --> SERVICE
+    ROUTES --> DOMAIN
+    SERVICE --> DOMAIN
+    REPO -.->|"implements LinkRepository"| DOMAIN
+    CODES -.->|"implements CodeGenerator"| DOMAIN
+    REPO -->|"parameterised SQL"| SQLITE
+    DB --> SQLITE

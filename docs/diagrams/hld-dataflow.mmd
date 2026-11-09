@@ -1,0 +1,19 @@
+flowchart LR
+    C["Link creator<br/>(curl / script)"] -->|"POST /links {url}"| R
+    V["Link visitor<br/>(browser)"] -->|"GET /{code}"| R
+    O["Owner"] -->|"GET /links/{code}/stats"| R
+    O -->|"./start.sh"| S["start.sh<br/>uv sync + uvicorn :PORT"]
+    S --> A["App factory<br/>config + DI wiring"]
+    A --> R
+
+    subgraph API["FastAPI process"]
+        R["Routes<br/>HTTP mapping, 201 / 307 / 404 / 422"] -->|"validate body"| SC["Schemas<br/>URL rules, response models"]
+        R -->|"create / resolve / stats"| SV["Service<br/>code + retry, click, stats"]
+        SV --> G["Code generator<br/>6 chars A-Za-z0-9"]
+        SV -->|"insert / get / increment"| RP["Repository<br/>parameterised SQL"]
+    end
+
+    RP -->|"sqlite3"| DB[("SQLite file<br/>links: code, url, clicks, created_at")]
+    R -->|"201 {code, short_url}"| C
+    R -->|"307 Location: url"| V
+    R -->|"200 {url, clicks, created_at}"| O
